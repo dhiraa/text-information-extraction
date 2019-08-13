@@ -178,7 +178,7 @@ class TFExecutor(object):
         tf.estimator.train_and_evaluate(self._estimator, train_spec, eval_spec)
 
     def export_model(self, model_export_path):
-        logging.info("Saving model to =======> ", model_export_path)
+        logging.info("Saving model to =======> {}".format(model_export_path))
         if not os.path.exists(model_export_path):
             os.makedirs(model_export_path)
         self._estimator.export_saved_model(

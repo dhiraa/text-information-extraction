@@ -13,6 +13,7 @@ from torch.utils.data import Dataset, ConcatDataset, Subset
 from torch._utils import _accumulate
 import torchvision.transforms as transforms
 
+from print_helper import *
 
 class Batch_Balanced_Dataset(object):
 
@@ -36,17 +37,18 @@ class Batch_Balanced_Dataset(object):
         For example, when select_data is "MJ-ST" and batch_ratio is "0.5-0.5",
         the 50% of the batch is filled with MJ and the other 50% of the batch is filled with ST.
         """
-        print('-' * 80)
-        print(f'dataset_root: {train_data}\nopt.select_data: {select_data}\nopt.batch_ratio: {batch_ratio}')
+        print_info('-' * 80)
+        print_info(f'dataset_root: {train_data}\nselect_data: {select_data}\nbatch_ratio: {batch_ratio}')
         assert len(select_data) == len(batch_ratio)
 
         _AlignCollate = AlignCollate(img_height=img_height, img_width=img_width, keep_ratio_with_pad=is_pad)
         self.data_loader_list = []
         self.dataloader_iter_list = []
         batch_size_list = []
-        Total_batch_size = 0
+        total_batch_size = 0
 
         for selected_d, batch_ratio_d in zip(select_data, batch_ratio):
+            print_info(selected_d)
             _batch_size = max(round(batch_size * float(batch_ratio_d)), 1)
             print('-' * 80)
             _dataset = hierarchical_dataset(root=train_data,
@@ -75,7 +77,7 @@ class Batch_Balanced_Dataset(object):
             print(f'num samples of {selected_d} per batch: {batch_size} x {float(batch_ratio_d)} (batch_ratio) = {_batch_size}')
 
             batch_size_list.append(str(_batch_size))
-            Total_batch_size += _batch_size
+            total_batch_size += _batch_size
 
             _data_loader = torch.utils.data.DataLoader(
                 _dataset,
@@ -87,8 +89,8 @@ class Batch_Balanced_Dataset(object):
             self.dataloader_iter_list.append(iter(_data_loader))
 
         print('-' * 80)
-        print('Total_batch_size: ', '+'.join(batch_size_list), '=', str(Total_batch_size))
-        batch_size = Total_batch_size
+        print('total_batch_size: ', '+'.join(batch_size_list), '=', str(total_batch_size))
+        batch_size = total_batch_size
         print('-' * 80)
 
     def get_batch(self):
@@ -126,7 +128,8 @@ def hierarchical_dataset(root,
                          select_data='/'):
     """ select_data='/' contains all sub-directory of root directory """
     dataset_list = []
-    print(f'dataset_root:    {root}\t dataset: {select_data[0]}')
+    print_info(f'dataset_root:    {root}\t dataset: {select_data[0]}')
+
     for dirpath, dirnames, filenames in os.walk(root+'/'):
         if not dirnames:
             select_flag = False
@@ -144,7 +147,7 @@ def hierarchical_dataset(root,
                                       img_height=img_height,
                                       img_width=img_width,
                                       sensitive=sensitive)
-                print(f'sub-directory:\t/{os.path.relpath(dirpath, root)}\t num samples: {len(dataset)}')
+                print_info(f'sub-directory:\t/{os.path.relpath(dirpath, root)}\t num samples: {len(dataset)}')
                 dataset_list.append(dataset)
 
     concatenated_dataset = ConcatDataset(dataset_list)

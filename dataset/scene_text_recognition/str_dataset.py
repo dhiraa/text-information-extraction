@@ -2,14 +2,15 @@ import torch
 import gin
 import string
 from dataset.scene_text_recognition.dataset import hierarchical_dataset, AlignCollate, Batch_Balanced_Dataset
-
+from absl import logging
+from print_helper import *
 
 @gin.configurable
 class SceneTextRecognitionDataset(object):
     def __init__(self,
-                 train_data=gin.REQUIRED,
-                 valid_data=gin.REQUIRED,
-                 select_data=gin.REQUIRED,
+                 train_data=None,
+                 valid_data=None,
+                 select_data="MJ-ST",
                  batch_ratio="0.5-0.5",
                  batch_size=192,
                  img_height=100,
@@ -25,6 +26,9 @@ class SceneTextRecognitionDataset(object):
 
         if sensitive:
             character = string.printable[:-6]  # same with ASTER setting (use 94 char).
+
+        select_data = select_data.split('-')
+        batch_ratio = batch_ratio.split('-')
 
         self.train_dataset = Batch_Balanced_Dataset(train_data=train_data,
                                                     select_data=select_data,
@@ -52,8 +56,8 @@ class SceneTextRecognitionDataset(object):
                                              is_rgb=is_rgb,
                                              img_height=img_height,
                                              img_width=img_width,
-                                             sensitive=sensitive,
-                                             select_data=select_data)
+                                             sensitive=sensitive)
+                                             # select_data=select_data)
 
         self.valid_loader = torch.utils.data.DataLoader(
             valid_dataset, batch_size=batch_size,

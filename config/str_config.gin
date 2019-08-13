@@ -1,14 +1,15 @@
+import config.str_imports
 
 IMAGE_WIDTH = 100
 IMAGE_HEIGHT = 32
 
 #path to training dataset
-SceneTextRecognitionDataset.train_data
-SceneTextRecognitionDataset.valid_data
+SceneTextRecognitionDataset.train_data = "data/scene-text-recognition-datasets/data_lmdb_release/training/"
+SceneTextRecognitionDataset.valid_data = "data/scene-text-recognition-datasets/data_lmdb_release/validation/"
 #select training data (default is MJ-ST which means MJ and ST used as training data)
 SceneTextRecognitionDataset.select_data = "MJ-ST"
 #assign ratio for each selected data in the batch
-SceneTextRecognitionDataset.batch_ratio = 0.5-0.5
+SceneTextRecognitionDataset.batch_ratio = "0.5-0.5"
 SceneTextRecognitionDataset.batch_size = 192
 SceneTextRecognitionDataset.img_height = %IMAGE_HEIGHT
 SceneTextRecognitionDataset.img_width = %IMAGE_WIDTH
@@ -16,7 +17,7 @@ SceneTextRecognitionDataset.img_width = %IMAGE_WIDTH
 SceneTextRecognitionDataset.is_pad = True
 #for data_filtering_off mode
 SceneTextRecognitionDataset.data_filtering_off = True
-SceneTextRecognitionDataset.num_samples
+#SceneTextRecognitionDataset.num_samples
 #maximum-label-length
 SceneTextRecognitionDataset.batch_max_length = 25
 #character label None | "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -48,6 +49,8 @@ SceneTextRecognitionModel.output_channel = 512
 SceneTextRecognitionModel.num_fiducial = 20
 #the size of the LSTM hidden state
 SceneTextRecognitionModel.hidden_size = 256
-SceneTextRecognitionModel.num_class =
+#SceneTextRecognitionModel.num_class =
 #character label None | "0123456789abcdefghijklmnopqrstuvwxyz"
-SceneTextRecognitionDataset.character = "0123456789abcdefghijklmnopqrstuvwxyz"
+SceneTextRecognitionModel.character = "0123456789abcdefghijklmnopqrstuvwxyz"
+SceneTextRecognitionModel.is_sensitive = False
+SceneTextRecognitionModel.batch_size = 192

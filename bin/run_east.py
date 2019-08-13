@@ -1,9 +1,12 @@
+import sys
 import gin
 import time
 import argparse
 from tqdm import tqdm
-
 import tensorflow as tf
+
+sys.path.append(".")
+
 from dataset.icdar.icdar_data import ICDARTFDataset
 from dataset.icdar.icdar_iterator import CIDARIterator
 from models.east.east_model import EASTModel
