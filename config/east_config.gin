@@ -1,0 +1,29 @@
+import east.east_imports
+
+
+#Experiments
+Experiments.batch_size=8
+Experiments.num_epochs=100
+Experiments.save_checkpoints_steps=112
+Experiments.keep_checkpoint_max=5
+Experiments.save_summary_steps=5
+Experiments.log_step_count_steps=2
+Experiments.clear_model_data=False
+Experiments.plug_dataset=True
+Experiments.mode='train'
+Experiments.max_steps_without_decrease = 10000
+
+
+# DataSet
+ICDARTFDataset.data_dir = "data/icdar-2019-data/"
+ICDARTFDataset.out_dir = "out-data/icdar-2019-data/"
+
+# Iterator
+CIDARIterator.data_dir = "out-data/icdar-2019-data/"
+CIDARIterator.batch_size = 4
+CIDARIterator.prefetch_size = 1
+CIDARIterator.num_threads = 4
+
+# Model
+EASTModel.model_root_directory = "store/east/"
+EASTModel.learning_rate = 0.001

@@ -2,6 +2,20 @@
 Text Localization using Deep Learning 
 
 
+## Environment Setup
+```
+echo "deb [arch=amd64] http://storage.googleapis.com/tensorflow-serving-apt stable tensorflow-model-server tensorflow-model-server-universal" | sudo tee /etc/apt/sources.list.d/tensorflow-serving.list && \
+curl https://storage.googleapis.com/tensorflow-serving-apt/tensorflow-serving.release.pub.gpg | sudo apt-key add -
+
+sudo apt-get update && sudo apt-get install tensorflow-model-server
+
+conda create --name tie
+pip install -r requirements
+
+conda activate tie
+
+```
+
 ## Dataset  
 **ICDAR [2019](http://rrc.cvc.uab.es/?ch=13)**   
 - Use Google Drive Link: https://drive.google.com/drive/folders/1ShItNWXyiY1tFDM5W02bceHuJjyeeJl2 
@@ -43,7 +57,7 @@ tensorboard --logdir=store/east/EASTModel/ #to view model metrics
 
 #Serving
 export MODEL_NAME=EAST
-export MODEL_PATH=/opt/github/text-localization/store/east/EASTModel/exported/ #full path is needed!
+export MODEL_PATH=$PWD/store/east/EASTModel/exported/ #full path is needed!
 
 tensorflow_model_server   \
 --port=8500   \

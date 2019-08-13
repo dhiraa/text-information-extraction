@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     ap = argparse.ArgumentParser()
     ap.add_argument("-cf", "--config_file",
-                    default="east/east_config.gin",
+                    default="config/east_config.gin",
                     help="Google gin config file path")
     args = vars(ap.parse_args())
     gin.parse_config_file(args['config_file'])

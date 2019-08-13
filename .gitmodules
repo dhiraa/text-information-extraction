@@ -1,3 +1,6 @@
 [submodule "data/icdar-2019-data"]
 	path = data/icdar-2019-data
 	url = https://github.com/dhiraa/icdar-2019-data
+[submodule "data/scene-text-recognition-datasets"]
+	path = data/scene-text-recognition-datasets
+	url = https://github.com/dhiraa/scene-text-recognition-datasets

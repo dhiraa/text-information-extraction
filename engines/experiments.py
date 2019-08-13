@@ -6,10 +6,14 @@ import os
 import shutil
 import gin
 import tensorflow as tf
+import torch
+import random
+import numpy as np
+import torch.nn as nn
 from tqdm import tqdm
 
 from print_helper import *
-from engines.executor import Executor
+from engines.tf_executor import TFExecutor
 
 
 @gin.configurable
@@ -34,7 +38,15 @@ class Experiments(object):
                  plug_dataset=True,
                  mode='train',
                  batch_size=8,
-                 max_steps_without_decrease=1000):
+                 max_steps_without_decrease=1000,
+                 random_seed=42):
+
+        """ Seed and GPU setting """
+        # print("Random Seed: ", random_seed)
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed(random_seed)
         
         self.mode = mode
 
@@ -89,10 +101,11 @@ class Experiments(object):
         if mode == "test_iterator":
             self.test_iterator()
 
-        executor = Executor(model=self._model,
-                            data_iterator=self._data_iterator,
-                            config=self._run_config,
-                            max_steps_without_decrease=self.max_steps_without_decrease)
+        if not isinstance(self._model, nn.Module):
+            executor = TFExecutor(model=self._model,
+                                  data_iterator=self._data_iterator,
+                                  config=self._run_config,
+                                  max_steps_without_decrease=self.max_steps_without_decrease)
 
         if mode in ["train", "retrain"]:
             for current_epoch in tqdm(range(num_epochs), desc="Epoch"):

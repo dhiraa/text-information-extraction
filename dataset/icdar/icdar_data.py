@@ -5,6 +5,7 @@ import os
 import gin
 import tensorflow as tf
 from tqdm import tqdm
+import multiprocessing
 from dataset.icdar.icdar_utils import *
 
 
@@ -26,6 +27,11 @@ def _mat_feature(mat):
 
 @gin.configurable
 class ICDARTFDataset:
+    """
+    References:
+        https://www.geeksforgeeks.org/multiprocessing-python-set-1/
+        https://www.geeksforgeeks.org/multiprocessing-python-set-2/
+    """
     def __init__(self,
                  data_dir=gin.REQUIRED,
                  out_dir=gin.REQUIRED,
@@ -73,7 +79,7 @@ class ICDARTFDataset:
             return
 
         with tf.io.TFRecordWriter(file_path_name) as writer:
-            for image_file in images:
+            for image_file in tqdm(images, desc="pid : " + str(os.getpid())):
                 ret = image_2_data(image_file_path=image_file,
                                    geometry=self._geometry,
                                    min_text_size=self._min_text_size,
@@ -90,6 +96,9 @@ class ICDARTFDataset:
 
         print("Number of files skipped : ", num_of_files_skipped)
 
+    def task(self, images_out_path):
+        self.write_tf_records(images=images_out_path[0], file_path_name=images_out_path[1])
+
     def prepare_data(self, data_path, out_path):
 
         print("Serializing data found in ", data_path)
@@ -97,10 +106,20 @@ class ICDARTFDataset:
         images = get_images(data_path)
 
         index = 0
+        multiprocess_list = []
         for i in tqdm(range(0, len(images), self._number_images_per_tfrecords), desc="prepare_data: "):
-            self.write_tf_records(images=images[i:i + self._number_images_per_tfrecords],
-                                  file_path_name=out_path + "/" + str(index) + ".tfrecords")
+            multiprocess_list.append((images[i:i + self._number_images_per_tfrecords],
+                                      out_path + "/" + str(index) + ".tfrecords"))
+
+            # self.write_tf_records(images=images[i:i + self._number_images_per_tfrecords],
+            #                       file_path_name=out_path + "/" + str(index) + ".tfrecords")
             index += 1
+
+        # creating a pool object
+        pool = multiprocessing.Pool()
+
+        # map list to target function
+        pool.map(self.task, multiprocess_list)
 
     def run(self):
         self.prepare_data(data_path=self._data_dir + "/train/", out_path=self._train_out_dir)

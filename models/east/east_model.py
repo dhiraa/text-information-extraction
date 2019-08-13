@@ -121,7 +121,7 @@ def conv_block(input_tensor,
     return x
 
 def unpool(inputs):
-    return tf.compat.v1.image.resize_bilinear(inputs, size=[tf.shape(inputs)[1]*2,  tf.shape(inputs)[2]*2])
+    return tf.image.resize(inputs, size=[tf.shape(inputs)[1]*2,  tf.shape(inputs)[2]*2])
 
 
 def mean_image_subtraction(images, means=[123.68, 116.78, 103.94]):
@@ -358,6 +358,12 @@ class EASTModel(ModelBase):
             # add summary
             tf.summary.scalar('learning_rate', learning_rate)
 
+            # optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate,
+            #    beta_1=0.9,
+            #    beta_2=0.999,
+            #    epsilon=1e-7,
+            #    amsgrad=False,
+            #    name='Adam')
             optimizer = tf.compat.v1.train.AdamOptimizer(
                 learning_rate=learning_rate,
                 beta1=0.9,
@@ -366,6 +372,7 @@ class EASTModel(ModelBase):
 
             batch_norm_updates_op = tf.group(*tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)) #TODO scope
             grads = optimizer.compute_gradients(loss)
+
             tower_grads.append(grads)
             grads = average_gradients(tower_grads)
             apply_gradient_op = optimizer.apply_gradients(grads, global_step=global_step)
@@ -432,7 +439,7 @@ class EASTModel(ModelBase):
             tf.compat.v1.summary.image('score_map_pred', f_score * 255)
             tf.compat.v1.summary.image('geo_map_0', input_geo_maps[:, :, :, 0:1])
             tf.compat.v1.summary.image('geo_map_0_pred', f_geometry[:, :, :, 0:1])
-            # tf.compat.v1.summary.image('training_masks', input_training_masks)
+            tf.compat.v1.summary.image('training_masks', input_training_masks)
             tf.summary.scalar('model_loss', model_loss)
             tf.summary.scalar('total_loss', loss)
 

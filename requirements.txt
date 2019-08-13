@@ -3,3 +3,11 @@ imutils
 matplotlib
 numpy
 tqdm
+torch
+fire
+lmdb
+natsort
+tensorflow-serving-api
+gin-config
+opencv-python
+shapely

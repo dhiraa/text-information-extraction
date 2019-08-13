@@ -7,7 +7,7 @@
 
 ## Configuration
 
-Check this [file](east_config.gin)!
+Check this [file](../config/east_config.gin)!
 
 ##Compile lanms
 
@@ -29,6 +29,9 @@ If you get compilation issues with lanms, follow this [link](https://github.com/
 - https://github.com/xieyufei1993/FOTS
 - https://github.com/hwalsuklee/awesome-deep-text-detection-recognition
 - https://github.com/tangzhenyu/Scene-Text-Understanding
+- https://github.com/kurapan/EAST
+- https://github.com/songdejia/EAST
+- https://github.com/huoyijie/AdvancedEAST
 
 ### References
 - https://berlinbuzzwords.de/18/session/scalable-ocr-pipelines-using-python-tensorflow-and-tesseract

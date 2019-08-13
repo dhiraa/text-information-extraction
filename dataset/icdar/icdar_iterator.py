@@ -19,7 +19,7 @@ class CIDARIterator:
 
     def __init__(self,
                  data_dir=gin.REQUIRED,
-                 num_threads=1,
+                 num_threads=4,
                  batch_size=16,
                  prefetch_size=16,
                  dataset=None):
@@ -164,6 +164,7 @@ class CIDARIterator:
 
     def serving_input_receiver_fn(self):
         inputs = {
+            # "images": tf.Variable(dtype=tf.float32, shape=[None, None, None, 3], validate_shape=False),
             "images": tf.compat.v1.placeholder(tf.float32, [None, None, None, 3]),
         }
         return tf.estimator.export.ServingInputReceiver(inputs, inputs)
