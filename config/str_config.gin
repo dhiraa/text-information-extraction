@@ -1,3 +1,7 @@
+
+IMAGE_WIDTH = 100
+IMAGE_HEIGHT = 32
+
 #path to training dataset
 SceneTextRecognitionDataset.train_data
 SceneTextRecognitionDataset.valid_data
@@ -6,8 +10,8 @@ SceneTextRecognitionDataset.select_data = "MJ-ST"
 #assign ratio for each selected data in the batch
 SceneTextRecognitionDataset.batch_ratio = 0.5-0.5
 SceneTextRecognitionDataset.batch_size = 192
-SceneTextRecognitionDataset.img_height = 32
-SceneTextRecognitionDataset.img_width = 100
+SceneTextRecognitionDataset.img_height = %IMAGE_HEIGHT
+SceneTextRecognitionDataset.img_width = %IMAGE_WIDTH
 #whether to keep ratio then pad for image resize
 SceneTextRecognitionDataset.is_pad = True
 #for data_filtering_off mode
@@ -15,13 +19,15 @@ SceneTextRecognitionDataset.data_filtering_off = True
 SceneTextRecognitionDataset.num_samples
 #maximum-label-length
 SceneTextRecognitionDataset.batch_max_length = 25
-#character label
+#character label None | "0123456789abcdefghijklmnopqrstuvwxyz"
 SceneTextRecognitionDataset.character = "0123456789abcdefghijklmnopqrstuvwxyz"
 SceneTextRecognitionDataset.is_rgb = True
 # for sensitive character mode
 SceneTextRecognitionDataset.sensitive = True
 # number of data loading workers
 SceneTextRecognitionDataset.workers = 4
+#total data usage ratio, this ratio is multiplied to total number of data.
+SceneTextRecognitionDataset.total_data_usage_ratio = 1.0
 
 
 #None|TPS
@@ -32,10 +38,10 @@ SceneTextRecognitionModel.feature_extraction_stage = "ResNet"
 SceneTextRecognitionModel.sequence_modeling_stage = "BiLSTM"
 #CTC|Attn
 SceneTextRecognitionModel.prediction_stage = "Attn"
-SceneTextRecognitionModel.img_width = 32
-SceneTextRecognitionModel.img_height = 100
+SceneTextRecognitionModel.img_width = %IMAGE_WIDTH
+SceneTextRecognitionModel.img_height = %IMAGE_HEIGHT
 #the number of input channel of Feature extractor
-SceneTextRecognitionModel.input_channel = 1
+SceneTextRecognitionModel.input_channel = 1 #depends on SceneTextRecognitionDataset.is_rgb
 #the number of output channel of Feature extractor
 SceneTextRecognitionModel.output_channel = 512
 #number of fiducial points of TPS-STN
@@ -43,3 +49,5 @@ SceneTextRecognitionModel.num_fiducial = 20
 #the size of the LSTM hidden state
 SceneTextRecognitionModel.hidden_size = 256
 SceneTextRecognitionModel.num_class =
+#character label None | "0123456789abcdefghijklmnopqrstuvwxyz"
+SceneTextRecognitionDataset.character = "0123456789abcdefghijklmnopqrstuvwxyz"

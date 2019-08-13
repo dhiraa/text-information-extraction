@@ -1,31 +1,39 @@
 import gin
+import torch
 import torch.nn as nn
+import torch.optim as optim
 
 from models.str.modules.transformation import TPS_SpatialTransformerNetwork
 from models.str.modules.feature_extraction import VGG_FeatureExtractor, RCNN_FeatureExtractor, ResNet_FeatureExtractor
 from models.str.modules.sequence_modeling import BidirectionalLSTM
 from models.str.modules.prediction import Attention
+from dataset.scene_text_recognition.utils import AttnLabelConverter, Averager, CTCLabelConverter
 
 @gin.configurable
-class SceneTextRecognitionModel(nn.Module):
+class SceneTextRecognitionModule(nn.Module):
 
     def __init__(self,
-                 transformation_stage,
-                 feature_extraction_stage,
-                 sequence_modeling_stage,
-                 prediction_stage,
-                 img_width,
-                 img_height,
-                 input_channel,
-                 output_channel,
-                 num_fiducial,
-                 hidden_size,
-                 num_class):
-        super(SceneTextRecognitionModel, self).__init__()
+                 transformation_stage="TPS",
+                 feature_extraction_stage="ResNet",
+                 sequence_modeling_stage="BiLSTM",
+                 prediction_stage="Attn",
+                 img_width=32,
+                 img_height=100,
+                 input_channel=1,
+                 output_channel=512,
+                 num_fiducial=20,
+                 hidden_size=256,
+                 num_class=gin.REQUIRED,
+                 is_adam=True,
+                 character=gin.REQUIRED):
+        super(SceneTextRecognitionModule, self).__init__()
         self.stages = {"transformation_stage": transformation_stage, 
                        "feature_extraction_stage": feature_extraction_stage,
                        "sequence_modeling_stage": sequence_modeling_stage, 
                        "prediction_stage": prediction_stage}
+
+        self.is_adam = is_adam
+        self.character = character
 
         """ Transformation """
         if transformation_stage == 'TPS':
@@ -95,3 +103,63 @@ class SceneTextRecognitionModel(nn.Module):
                                                batch_max_length=self.opt.batch_max_length)
 
         return prediction
+
+
+    def get_loss_op(self):
+        """ setup loss """
+        if 'CTC' in self.stages["prediction_stage"]:
+            criterion = torch.nn.CTCLoss(zero_infinity=True).to(device)
+        else:
+            criterion = torch.nn.CrossEntropyLoss(ignore_index=0).to(device)  # ignore [GO] token = ignore index 0
+
+        return criterion
+
+    def get_cost(self, model, feature, label):
+        assert (isinstance(model, self))
+
+        criterion = self.get_loss_op()
+
+        image, text, length = feature["image"], label["text"], label["length"]
+        if 'CTC' in self.stages["prediction_stage"]:
+            preds = model(image, text).log_softmax(2)
+            preds_size = torch.IntTensor([preds.size(1)] * batch_size).to(device)
+            preds = preds.permute(1, 0, 2)  # to use CTCLoss format
+
+            # To avoid ctc_loss issue, disabled cudnn for the computation of the ctc_loss
+            # https://github.com/jpuigcerver/PyLaia/issues/16
+            torch.backends.cudnn.enabled = False
+            cost = criterion(preds, text, preds_size, length)
+            torch.backends.cudnn.enabled = True
+
+        else:
+            preds = model(image, text[:, :-1])  # align with Attention.forward
+            target = text[:, 1:]  # without [GO] Symbol
+            cost = criterion(preds.view(-1, preds.shape[-1]), target.contiguous().view(-1))
+
+        return cost
+
+    def get_converter(self):
+        """ model configuration """
+        if 'CTC' in self.stages["prediction_stage"]:
+            converter = CTCLabelConverter(self.character)
+        else:
+            converter = AttnLabelConverter(self.character)
+        self.num_class = len(converter.character)
+
+    def get_optimizer(self):
+        # filter that only require gradient decent
+        filtered_parameters = []
+        params_num = []
+        for p in filter(lambda p: p.requires_grad, model.parameters()):
+            filtered_parameters.append(p)
+            params_num.append(np.prod(p.size()))
+        print('Trainable params num : ', sum(params_num))
+        # [print(name, p.numel()) for name, p in filter(lambda p: p[1].requires_grad, model.named_parameters())]
+
+        # setup optimizer
+        if self.is_adam:
+            optimizer = optim.Adam(filtered_parameters, lr=opt.lr, betas=(opt.beta1, 0.999))
+        else:
+            optimizer = optim.Adadelta(filtered_parameters, lr=opt.lr, rho=opt.rho, eps=opt.eps)
+        print("Optimizer:")
+        print(optimizer)

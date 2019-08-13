@@ -25,7 +25,7 @@ def main(args):
     print(model)
 
     experiment = Experiments(dataset=dataset, iterator=iterator, model=model)
-    experiment.run(None)
+    experiment.run()
 
     print(' -' * 35)
 

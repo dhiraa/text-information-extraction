@@ -12,9 +12,6 @@ from tensorflow_serving.apis import prediction_service_pb2_grpc
 from dataset.icdar.icdar_data import get_images
 from serving.east.prediction import resize_image, sort_poly, detect
 
-
-
-
 # https://sthalles.github.io/serving_tensorflow_models/
 # https://medium.com/@yuu.ishikawa/serving-pre-modeled-and-custom-tensorflow-estimator-with-tensorflow-serving-12833b4be421
 

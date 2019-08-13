@@ -121,6 +121,9 @@ class ICDARTFDataset:
         # map list to target function
         pool.map(self.task, multiprocess_list)
 
+        pool.close()
+        pool.join()
+
     def run(self):
         self.prepare_data(data_path=self._data_dir + "/train/", out_path=self._train_out_dir)
         self.prepare_data(data_path=self._data_dir + "/val/", out_path=self._val_out_dir)

@@ -90,7 +90,7 @@ class Experiments(object):
                 print("Batch {} =>  Shape of feature : {} is {}".format(i, key, features[key].shape))
                 i = i + 1
 
-    def run(self, args):
+    def run(self):
         num_samples = self._data_iterator.num_train_examples
         print_info("Number of training samples : {}".format(num_samples))
         batch_size = self.batch_size
