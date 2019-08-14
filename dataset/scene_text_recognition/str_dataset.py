@@ -1,7 +1,7 @@
 import torch
 import gin
 import string
-from dataset.scene_text_recognition.dataset import hierarchical_dataset, AlignCollate, Batch_Balanced_Dataset
+from dataset.scene_text_recognition.helpers import hierarchical_dataset, AlignCollate, Batch_Balanced_Dataset
 from absl import logging
 from print_helper import *
 
@@ -29,6 +29,8 @@ class SceneTextRecognitionDataset(object):
 
         select_data = select_data.split('-')
         batch_ratio = batch_ratio.split('-')
+
+        self._batch_size = batch_size
 
         self.train_dataset = Batch_Balanced_Dataset(train_data=train_data,
                                                     select_data=select_data,

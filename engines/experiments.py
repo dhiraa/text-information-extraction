@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from print_helper import *
 from engines.tf_executor import TFExecutor
+from engines.torch_executor import TorchExecutor
 
 
 @gin.configurable
@@ -27,9 +28,10 @@ class Experiments(object):
 
     def __init__(self,
                  dataset,
-                 iterator,
                  model,
+                 iterator=None,
                  num_epochs=5,
+                 num_max_steps=1000,
                  save_checkpoints_steps=50,
                  keep_checkpoint_max=5,
                  save_summary_steps=25,
@@ -51,6 +53,7 @@ class Experiments(object):
         self.mode = mode
 
         self.num_epochs = num_epochs
+        self._num_max_steps = num_max_steps
         self._dataset = dataset
         self._data_iterator = iterator
         self._model = model
@@ -91,17 +94,19 @@ class Experiments(object):
                 i = i + 1
 
     def run(self):
-        num_samples = self._data_iterator.num_train_examples
-        print_info("Number of training samples : {}".format(num_samples))
-        batch_size = self.batch_size
+        # num_samples = self._data_iterator.num_train_examples
+        # print_info("Number of training samples : {}".format(num_samples))
+        # batch_size = self.batch_size
         num_epochs = self.num_epochs
         mode = self.mode
-        self._init_tf_config()
 
         if mode == "test_iterator":
             self.test_iterator()
 
-        if not isinstance(self._model, nn.Module):
+        if isinstance(self._model, nn.Module):
+            executor = TorchExecutor(model=self._model, dataset=self._dataset)
+        else:
+            self._init_tf_config()
             executor = TFExecutor(model=self._model,
                                   data_iterator=self._data_iterator,
                                   config=self._run_config,
@@ -109,13 +114,12 @@ class Experiments(object):
 
         if mode in ["train", "retrain"]:
             for current_epoch in tqdm(range(num_epochs), desc="Epoch"):
-                current_max_steps = (num_samples // batch_size) * (current_epoch + 1)
-                print("\n\n Training for epoch {} with steps {}\n\n".format(current_epoch, current_max_steps))
-                executor.train(max_steps=None)
-                print("\n\n Evaluating for epoch\n\n", current_epoch)
-                executor.evaluate()
-                executor.export_model(self._model.model_dir + "/exported/")
-
+                # current_max_steps = (num_samples // batch_size) * (current_epoch + 1)
+                # print("\n\n Training for epoch {} with steps {}\n\n".format(current_epoch, current_max_steps))
+                executor.train(num_max_steps=self._num_max_steps)
+                # print("\n\n Evaluating for epoch\n\n", current_epoch)
+                # executor.evaluate()
+                # executor.export_model(self._model.model_dir + "/exported/")
         else:
-            print_error("Given mode is not avaialble!")
+            print_error("Given mode is not available!")
 

@@ -52,14 +52,14 @@ class Batch_Balanced_Dataset(object):
             _batch_size = max(round(batch_size * float(batch_ratio_d)), 1)
             print('-' * 80)
             _dataset = hierarchical_dataset(root=train_data,
-                         data_filtering_off=data_filtering_off,
-                         batch_max_length=batch_max_length,
-                         character=character,
-                         is_rgb=is_rgb,
-                         img_height=img_height,
-                         img_width=img_width,
-                         sensitive=sensitive,
-                         select_data=[selected_d])
+                                            data_filtering_off=data_filtering_off,
+                                            batch_max_length=batch_max_length,
+                                            character=character,
+                                            is_rgb=is_rgb,
+                                            img_height=img_height,
+                                            img_width=img_width,
+                                            sensitive=sensitive,
+                                            select_data=[selected_d])
 
             total_number_dataset = len(_dataset)
 

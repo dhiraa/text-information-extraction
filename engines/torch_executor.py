@@ -4,14 +4,15 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn.init as init
 from dataset.scene_text_recognition.utils import Averager
+from print_helper import print_info
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class TorchExecutor(object):
     def __init__(self,
-                 workers,
                  model,
-                 dataset):
+                 dataset,
+                 workers=4):
 
         self._model = model
         self._dataset = dataset
@@ -41,14 +42,14 @@ class TorchExecutor(object):
                     param.data.fill_(1)
                 continue
 
-    def train(self, num_steps=None, num_epoch=None):
-        assert(num_steps is not None and num_epoch is not None, "Use steps or epoch at a time")
+    def train(self, num_max_steps=None, num_epoch=None):
+        assert(num_max_steps is not None and num_epoch is not None, "Use steps or epoch at a time")
         # data parallel for multi-GPU
         model = torch.nn.DataParallel(self._model).to(device)
         model.train()
 
-        num_samples = len(self._dataset)
-        batch_size = self._dataset.batch_size
+        num_samples = 7224586 + 5522808 #len(self._dataset)
+        batch_size = self._dataset._batch_size
 
         num_steps_per_epoch = num_samples // batch_size
 
@@ -58,15 +59,15 @@ class TorchExecutor(object):
         if num_epoch:
             total_num_steps = num_steps_per_epoch * num_epoch
 
-        if num_steps:
-            total_num_steps = num_steps
+        if num_max_steps:
+            total_num_steps = num_max_steps
 
         # loss averager
         loss_avg = Averager()
 
         train_dataset = self._dataset.get_train_dataset()
         converter = self._model.get_converter()
-        criterion = self._model.get_loss_op()
+        # criterion = self._model.get_loss_op()
 
         start_time = time.time()
         best_accuracy = -1
@@ -76,7 +77,8 @@ class TorchExecutor(object):
             # train part
             image_tensors, labels = train_dataset.get_batch()
             image = image_tensors.to(device)
-            text, length = converter.encode(labels, batch_max_length=self.batch_max_length)
+            print_info(labels)
+            text, length = converter.encode(labels, batch_max_length=25)#self.batch_max_length)
             batch_size = image.size(0)
 
             feature = dict()
@@ -88,7 +90,8 @@ class TorchExecutor(object):
 
             model.zero_grad()
             cost.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)  # gradient clipping with 5 (Default)
+            grad_clip = 5
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)  # gradient clipping with 5 (Default)
             optimizer.step()
 
             loss_avg.add(cost)

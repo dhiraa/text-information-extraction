@@ -2,6 +2,8 @@ import config.str_imports
 
 IMAGE_WIDTH = 100
 IMAGE_HEIGHT = 32
+CASE_SENSITIVE = True
+BATCH_SIZE = 96
 
 #path to training dataset
 SceneTextRecognitionDataset.train_data = "data/scene-text-recognition-datasets/data_lmdb_release/training/"
@@ -10,7 +12,7 @@ SceneTextRecognitionDataset.valid_data = "data/scene-text-recognition-datasets/d
 SceneTextRecognitionDataset.select_data = "MJ-ST"
 #assign ratio for each selected data in the batch
 SceneTextRecognitionDataset.batch_ratio = "0.5-0.5"
-SceneTextRecognitionDataset.batch_size = 192
+SceneTextRecognitionDataset.batch_size = %BATCH_SIZE
 SceneTextRecognitionDataset.img_height = %IMAGE_HEIGHT
 SceneTextRecognitionDataset.img_width = %IMAGE_WIDTH
 #whether to keep ratio then pad for image resize
@@ -22,14 +24,14 @@ SceneTextRecognitionDataset.data_filtering_off = True
 SceneTextRecognitionDataset.batch_max_length = 25
 #character label None | "0123456789abcdefghijklmnopqrstuvwxyz"
 SceneTextRecognitionDataset.character = "0123456789abcdefghijklmnopqrstuvwxyz"
-SceneTextRecognitionDataset.is_rgb = True
+SceneTextRecognitionDataset.is_rgb = False
 # for sensitive character mode
-SceneTextRecognitionDataset.sensitive = True
+SceneTextRecognitionDataset.sensitive = %CASE_SENSITIVE
 # number of data loading workers
 SceneTextRecognitionDataset.workers = 4
 #total data usage ratio, this ratio is multiplied to total number of data.
 SceneTextRecognitionDataset.total_data_usage_ratio = 1.0
-
+SceneTextRecognitionDataset.batch_max_length = 25
 
 #None|TPS
 SceneTextRecognitionModel.transformation_stage = "TPS"
@@ -52,5 +54,5 @@ SceneTextRecognitionModel.hidden_size = 256
 #SceneTextRecognitionModel.num_class =
 #character label None | "0123456789abcdefghijklmnopqrstuvwxyz"
 SceneTextRecognitionModel.character = "0123456789abcdefghijklmnopqrstuvwxyz"
-SceneTextRecognitionModel.is_sensitive = False
-SceneTextRecognitionModel.batch_size = 192
+SceneTextRecognitionModel.is_sensitive = %CASE_SENSITIVE
+SceneTextRecognitionModel.batch_size = %BATCH_SIZE

@@ -1,4 +1,7 @@
 import torch
+
+from print_helper import print_error
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -59,6 +62,10 @@ class AttnLabelConverter(object):
         list_token = ['[GO]', '[s]']  # ['[s]','[UNK]','[PAD]','[GO]']
         list_character = list(character)
         self.character = list_token + list_character
+
+        print_error("===================================")
+        print_error(self.character)
+        print_error("===================================")
 
         self.dict = {}
         for i, char in enumerate(self.character):

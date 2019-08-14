@@ -6,6 +6,7 @@ import torch.optim as optim
 
 import numpy as np
 
+from dataset.scene_text_recognition.str_dataset import SceneTextRecognitionDataset
 from models.str.modules.transformation import TPS_SpatialTransformerNetwork
 from models.str.modules.feature_extraction import VGG_FeatureExtractor, RCNN_FeatureExtractor, ResNet_FeatureExtractor
 from models.str.modules.sequence_modeling import BidirectionalLSTM
@@ -31,7 +32,8 @@ class SceneTextRecognitionModel(nn.Module):
                  is_adam=True,
                  character=None,
                  is_sensitive=True,
-                 batch_size=192):
+                 batch_size=192,
+                 batch_max_length=25):
         super(SceneTextRecognitionModel, self).__init__()
         self.stages = {"transformation_stage": transformation_stage, 
                        "feature_extraction_stage": feature_extraction_stage,
@@ -41,6 +43,7 @@ class SceneTextRecognitionModel(nn.Module):
         self.is_adam = is_adam
         self.character = character
         self.batch_size = batch_size
+        self.batch_max_length = batch_max_length
 
         if is_sensitive:
             # opt.character += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -113,7 +116,7 @@ class SceneTextRecognitionModel(nn.Module):
             prediction = self.prediction_model(contextual_feature.contiguous(),
                                                text,
                                                is_train,
-                                               batch_max_length=self.opt.batch_max_length)
+                                               batch_max_length=self.batch_max_length)
 
         return prediction
 
@@ -128,7 +131,7 @@ class SceneTextRecognitionModel(nn.Module):
         return criterion
 
     def get_cost(self, model, feature, label):
-        assert (isinstance(model, self))
+        assert (isinstance(model, SceneTextRecognitionModel))
 
         criterion = self.get_loss_op()
 
@@ -159,8 +162,10 @@ class SceneTextRecognitionModel(nn.Module):
             converter = AttnLabelConverter(self.character)
         self.num_class = len(converter.character)
 
+        return converter
+
     def get_optimizer(self, model):
-        assert (isinstance(model, self))
+        # assert (isinstance(model, SceneTextRecognitionModel))
         # filter that only require gradient decent
         filtered_parameters = []
         params_num = []
@@ -177,3 +182,5 @@ class SceneTextRecognitionModel(nn.Module):
             optimizer = optim.Adadelta(filtered_parameters, lr=1.0, rho=0.95, eps=1e-8)
         print("Optimizer:")
         print(optimizer)
+
+        return optimizer

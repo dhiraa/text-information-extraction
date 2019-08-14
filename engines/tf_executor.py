@@ -119,7 +119,7 @@ class TFExecutor(object):
             steps=steps,
             hooks=self._eval_hooks)
 
-    def train(self, max_steps=None):
+    def train(self, num_max_steps=None):
         """
         Trains the model. See :tf_main:`tf.estimator.Estimator.train
         <estimator/Estimator#train>` for more details.
