@@ -1,8 +1,12 @@
+import os
+import time
+
 import gin
 import string
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from nltk.metrics.distance import edit_distance
 
 import numpy as np
 
@@ -33,7 +37,8 @@ class SceneTextRecognitionModel(nn.Module):
                  character=None,
                  is_sensitive=True,
                  batch_size=192,
-                 batch_max_length=25):
+                 batch_max_length=25,
+                 model_root_directory=None):
         super(SceneTextRecognitionModel, self).__init__()
         self.stages = {"transformation_stage": transformation_stage, 
                        "feature_extraction_stage": feature_extraction_stage,
@@ -44,6 +49,7 @@ class SceneTextRecognitionModel(nn.Module):
         self.character = character
         self.batch_size = batch_size
         self.batch_max_length = batch_max_length
+        self._model_root_directory = model_root_directory
 
         if is_sensitive:
             # opt.character += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -120,6 +126,14 @@ class SceneTextRecognitionModel(nn.Module):
 
         return prediction
 
+    @property
+    def model_dir(self):
+        """
+        Returns model directory `model_root_directory`/SceneTextRecognitionModel
+        :return:
+        """
+        return os.path.join(self._model_root_directory,
+                            type(self).__name__)
 
     def get_loss_op(self):
         """ setup loss """
@@ -184,3 +198,70 @@ class SceneTextRecognitionModel(nn.Module):
         print(optimizer)
 
         return optimizer
+
+
+    def get_predictions(self, model, batch_size, image, labels):
+        start_time = time.time()
+
+        criterion = self.get_loss_op()
+        batch_max_length = 25
+        converter = self.get_converter()
+
+        # For max length prediction
+        length_for_pred = torch.IntTensor([batch_max_length] * self._dataset._batch_size).to(device)
+        text_for_pred = torch.LongTensor(self._dataset._batch_size, batch_max_length + 1).fill_(0).to(device)
+
+        text_for_loss, length_for_loss = converter.encode(labels, batch_max_length=batch_max_length)
+
+
+        if 'CTC' in self.stages["prediction_stage"]:
+            preds = model(image, text_for_pred).log_softmax(2)
+            forward_time = time.time() - start_time
+
+            # Calculate evaluation loss for CTC deocder.
+            preds_size = torch.IntTensor([preds.size(1)] * batch_size)
+            preds = preds.permute(1, 0, 2)  # to use CTCloss format
+
+            # To avoid ctc_loss issue, disabled cudnn for the computation of the ctc_loss
+            # https://github.com/jpuigcerver/PyLaia/issues/16
+            torch.backends.cudnn.enabled = False
+            cost = criterion(preds, text_for_loss, preds_size, length_for_loss)
+            torch.backends.cudnn.enabled = True
+
+            # Select max probabilty (greedy decoding) then decode index to character
+            _, preds_index = preds.max(2)
+            preds_index = preds_index.transpose(1, 0).contiguous().view(-1)
+            preds_str = converter.decode(preds_index.data, preds_size.data)
+
+        else:
+            preds = model(image, text_for_pred, is_train=False)
+            forward_time = time.time() - start_time
+
+            preds = preds[:, :text_for_loss.shape[1] - 1, :]
+            target = text_for_loss[:, 1:]  # without [GO] Symbol
+            cost = criterion(preds.contiguous().view(-1, preds.shape[-1]), target.contiguous().view(-1))
+
+            # select max probabilty (greedy decoding) then decode index to character
+            _, preds_index = preds.max(2)
+            preds_str = converter.decode(preds_index, length_for_pred)
+            labels = converter.decode(text_for_loss[:, 1:], length_for_loss)
+
+        return forward_time, cost, preds_str
+
+    def get_accuracy(self, preds_str, labels):
+        n_correct = 0
+        norm_ED = 0
+        # calculate accuracy.
+        for pred, gt in zip(preds_str, labels):
+            if 'Attn' in self.stages["prediction_stage"]:
+                pred = pred[:pred.find('[s]')]  # prune after "end of sentence" token ([s])
+                gt = gt[:gt.find('[s]')]
+
+            if pred == gt:
+                n_correct += 1
+            if len(gt) == 0:
+                norm_ED += 1
+            else:
+                norm_ED += edit_distance(pred, gt) / len(gt)
+
+        return n_correct, norm_ED

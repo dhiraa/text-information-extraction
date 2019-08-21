@@ -67,16 +67,18 @@ class TFExecutor(object):
     """
 
     def __init__(self,
+                 experiment_name,
                  model,
-                 data_iterator,
+                 dataset,
                  config,
                  max_steps_without_decrease=1000,
                  train_hooks=None,
                  eval_hooks=None,
                  session_config=None):
+        self._experiment_name = experiment_name
         self._model = model
         self._config = config
-        self._data_iterator = data_iterator
+        self.dataset = dataset
         self._train_hooks = train_hooks
         self._eval_hooks = eval_hooks
         self._session_config = session_config
@@ -103,19 +105,19 @@ class TFExecutor(object):
 
     @property
     def data_iterator(self):
-        return self._data_iterator
+        return self.dataset
 
     def _get_train_spec(self, max_steps=None):
         # Estimators expect an input_fn to take no arguments.
         # To work around this restriction, we use lambda to capture the arguments and provide the expected interface.
         return tf.estimator.TrainSpec(
-            input_fn=lambda: self._data_iterator.train_input_fn(),
+            input_fn=lambda: self.dataset.train_set(),
             max_steps=max_steps,
             hooks=self._train_hooks)
 
     def _get_eval_spec(self, steps):
         return tf.estimator.EvalSpec(
-            input_fn=lambda: self._data_iterator.val_input_fn(),
+            input_fn=lambda: self.dataset.validation_set(),
             steps=steps,
             hooks=self._eval_hooks)
 
@@ -130,7 +132,7 @@ class TFExecutor(object):
                 data generates the OutOfRange exception. If OutOfRange occurs
                 in the middle, training stops before :attr:`max_steps` steps.
         """
-        train_spec = self._get_train_spec(max_steps=max_steps)
+        train_spec = self._get_train_spec(max_steps=num_max_steps)
         self._estimator.train(
             input_fn=train_spec.input_fn,
             hooks=train_spec.hooks,
@@ -183,4 +185,4 @@ class TFExecutor(object):
             os.makedirs(model_export_path)
         self._estimator.export_saved_model(
             model_export_path,
-            serving_input_receiver_fn=self._data_iterator.serving_input_receiver_fn)
+            serving_input_receiver_fn=self.dataset.serving_input_receiver_fn)

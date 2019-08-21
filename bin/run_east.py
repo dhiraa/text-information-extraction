@@ -8,7 +8,6 @@ import tensorflow as tf
 sys.path.append(".")
 
 from dataset.icdar.icdar_data import ICDARTFDataset
-from dataset.icdar.icdar_iterator import CIDARIterator
 from models.east.east_model import EASTModel
 from engines.experiments import Experiments
 
@@ -21,13 +20,12 @@ def main(args):
     print('Running Experiment:')
     print(' -' * 35)
     dataset = ICDARTFDataset()
-    dataset.run()
+    dataset.preprocess()
 
-    iterator = CIDARIterator()
     model = EASTModel()
     print(model)
 
-    experiment = Experiments(dataset=dataset, iterator=iterator, model=model)
+    experiment = Experiments(name="EAST", dataset=dataset, model=model)
     experiment.run()
 
     print(' -' * 35)

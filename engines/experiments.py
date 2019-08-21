@@ -27,11 +27,12 @@ class Experiments(object):
     """
 
     def __init__(self,
+                 name,
                  dataset,
                  model,
-                 iterator=None,
                  num_epochs=5,
                  num_max_steps=1000,
+                 validation_interval_steps=50,
                  save_checkpoints_steps=50,
                  keep_checkpoint_max=5,
                  save_summary_steps=25,
@@ -52,10 +53,11 @@ class Experiments(object):
         
         self.mode = mode
 
+        self._name = name
+
         self.num_epochs = num_epochs
         self._num_max_steps = num_max_steps
         self._dataset = dataset
-        self._data_iterator = iterator
         self._model = model
         self.save_checkpoints_steps = save_checkpoints_steps
         self.keep_checkpoint_max = keep_checkpoint_max
@@ -65,6 +67,7 @@ class Experiments(object):
         self.plug_dataset = plug_dataset
         self.batch_size = batch_size
         self.max_steps_without_decrease = max_steps_without_decrease
+        self._validation_interval_steps = validation_interval_steps
 
     def _init_tf_config(self):
         run_config = tf.compat.v1.ConfigProto()
@@ -88,7 +91,7 @@ class Experiments(object):
 
     def test_iterator(self):
         i = 0
-        for features, label in tqdm(self.data_iterator.train_input_fn()):
+        for features, label in tqdm(self._dataset.train_set()):
             for key in features.keys():
                 print("Batch {} =>  Shape of feature : {} is {}".format(i, key, features[key].shape))
                 i = i + 1
@@ -104,11 +107,16 @@ class Experiments(object):
             self.test_iterator()
 
         if isinstance(self._model, nn.Module):
-            executor = TorchExecutor(model=self._model, dataset=self._dataset)
+            executor = TorchExecutor(experiment_name=self._name,
+                                     model=self._model,
+                                     dataset=self._dataset,
+                                     max_train_steps=self._num_max_steps,
+                                     validation_interval_steps=self._validation_interval_steps)
         else:
             self._init_tf_config()
-            executor = TFExecutor(model=self._model,
-                                  data_iterator=self._data_iterator,
+            executor = TFExecutor(experiment_name=self._name,
+                                  model=self._model,
+                                  dataset=self._dataset,
                                   config=self._run_config,
                                   max_steps_without_decrease=self.max_steps_without_decrease)
 

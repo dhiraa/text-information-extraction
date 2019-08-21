@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
-
+import glob
 import os
 import gin
 import tensorflow as tf
 from tqdm import tqdm
 import multiprocessing
+
+from dataset.dataset_base import TensorFlowDataset
 from dataset.icdar.icdar_utils import *
 
 
@@ -25,8 +27,15 @@ def _mat_feature(mat):
     return tf.train.Feature(float_list=tf.train.FloatList(value=mat.flatten()))
 
 
+def get_tf_records_count(files):
+    total_records = -1
+    for file in tqdm(files, desc="tfrecords size: "):
+        total_records += sum(1 for _ in tf.data.TFRecordDataset(file))
+    return total_records
+
+
 @gin.configurable
-class ICDARTFDataset:
+class ICDARTFDataset(TensorFlowDataset):
     """
     References:
         https://www.geeksforgeeks.org/multiprocessing-python-set-1/
@@ -40,7 +49,15 @@ class ICDARTFDataset:
                  min_text_size=5,
                  min_crop_side_ratio=0.1,
                  geometry="RBOX",
-                 number_images_per_tfrecords=8):
+                 number_images_per_tfrecords=8,
+                 num_cores=4,
+                 batch_size=16,
+                 prefetch_size=16):
+
+        TensorFlowDataset.__init__(self,
+                                   data_dir=data_dir,
+                                   batch_size=batch_size,
+                                   num_cores=num_cores)
 
         self._data_dir = data_dir
 
@@ -59,7 +76,18 @@ class ICDARTFDataset:
         self._min_crop_side_ratio = min_crop_side_ratio
         self._number_images_per_tfrecords = number_images_per_tfrecords
 
-        self.run()
+        self.preprocess()
+
+        self._data_dir = data_dir
+        self._num_cores = num_cores
+        self._batch_size = batch_size
+        self._prefetch_size = prefetch_size
+
+        self._num_train_examples = -1
+
+        # TODO find a right way to get this
+        files = glob.glob(os.path.join(self._data_dir, "train/*.tfrecords"))
+        self._num_train_examples = get_tf_records_count(files=files)
 
     def _get_features(self, image_mat, score_map_mat, geo_map_mat, training_masks_mat):
         """
@@ -124,7 +152,118 @@ class ICDARTFDataset:
         pool.close()
         pool.join()
 
-    def run(self):
+    def preprocess(self):
         self.prepare_data(data_path=self._data_dir + "/train/", out_path=self._train_out_dir)
         self.prepare_data(data_path=self._data_dir + "/val/", out_path=self._val_out_dir)
         self.prepare_data(data_path=self._data_dir + "/test/", out_path=self._test_out_dir)
+
+    @property
+    def num_train_examples(self):
+        return self._num_train_examples
+
+    def dataset_to_iterator(self, dataset):
+        # Create an iterator
+        iterator = dataset.make_one_shot_iterator()
+
+        # Create your tf representation of the iterator
+        image, label = iterator.get_next()
+
+        # # Bring your picture back in shape
+        # image = tf.reshape(image, [-1, 256, 256, 1])
+        #
+        # # Create a one hot array for your labels
+        # label = tf.one_hot(label, NUM_CLASSES)
+
+        return image, label
+
+    def decode(self, serialized_example):
+        # 1. define a parser
+        features = tf.io.parse_single_example(
+            serialized_example,
+            # Defaults are not specified since both keys are required.
+            features={
+                'images': tf.io.FixedLenFeature([512 * 512 * 3], tf.float32),
+                'score_maps': tf.io.FixedLenFeature([128 * 128 * 1], tf.float32),
+                'geo_maps': tf.io.FixedLenFeature([128 * 128 * 5], tf.float32),
+                'training_masks': tf.io.FixedLenFeature([128 * 128 * 1], tf.float32),
+            })
+
+        image = tf.reshape(
+            tf.cast(features['images'], tf.float32), shape=[512, 512, 3])
+        score_map = tf.reshape(
+            tf.cast(features['score_maps'], tf.float32), shape=[128, 128, 1])
+        geo_map = tf.reshape(
+            tf.cast(features['geo_maps'], tf.float32), shape=[128, 128, 5])
+        training_masks = tf.reshape(
+            tf.cast(features['training_masks'], tf.float32), shape=[128, 128, 1])
+
+        return {"images": image, "score_maps": score_map, "geo_maps": geo_map,
+                "training_masks": training_masks}, training_masks
+
+    def _get_train_dataset(self):
+        """
+        Inheriting class must implement this
+        :return: dataset
+        """
+        files = glob.glob(os.path.join(self._train_out_dir, "/*.tfrecords"))
+
+        # self._num_train_examples = get_tf_records_count(files=files)
+        # TF dataset APIs
+        dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        # Map the generator output as features as a dict and labels
+        dataset = dataset.map(self.decode)
+
+        dataset = dataset.batch(batch_size=self._batch_size, drop_remainder=False)
+        dataset = dataset.prefetch(self._prefetch_size)
+        # dataset = dataset.cache(filename=os.path.join(self.iterator_dir, "train_data_cache"))
+        print("Dataset output sizes are: ")
+        print(dataset)
+
+        return dataset
+
+    def _get_val_dataset(self):
+        """
+        Inheriting class must implement this
+        :return: callable
+        """
+        files = glob.glob(os.path.join(self._val_out_dir, "/*.tfrecords"))
+        # TF dataset APIs
+        dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        # Map the generator output as features as a dict and labels
+        dataset = dataset.map(self.decode)
+
+        dataset = dataset.batch(
+            batch_size=self._batch_size, drop_remainder=False)
+        dataset = dataset.prefetch(self._prefetch_size)
+        print("Dataset output sizes are: ")
+        print(dataset)
+
+        return dataset
+
+    def _get_test_dataset(self):
+        """
+        Inheriting class must implement this
+        :return: callable
+        """
+        files = glob.glob(os.path.join(self._test_out_dir, "/*.tfrecords"))
+        # TF dataset APIs
+        dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+
+        # Map the generator output as features as a dict and labels
+        dataset = dataset.map(self.decode)
+
+        dataset = dataset.batch(
+            batch_size=self._hparams.batch_size, drop_remainder=True)
+        dataset = dataset.prefetch(self._hparams.prefetch_size)
+        print("Dataset output sizes are: ")
+        print(dataset)
+
+        return dataset
+
+    def serving_input_receiver_fn(self):
+        inputs = {
+            # "images": tf.Variable(dtype=tf.float32, shape=[None, None, None, 3], validate_shape=False),
+            "images": tf.compat.v1.placeholder(tf.float32, [None, None, None, 3]),
+        }
+        return tf.estimator.export.ServingInputReceiver(inputs, inputs)
+

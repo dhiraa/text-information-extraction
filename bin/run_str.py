@@ -21,7 +21,7 @@ def main(args):
     dataset = SceneTextRecognitionDataset()
     model = SceneTextRecognitionModel()
 
-    experiment = Experiments(dataset=dataset, iterator=None, model=model)
+    experiment = Experiments(dataset=dataset, model=model)
     experiment.run()
 
     print(' -' * 35)

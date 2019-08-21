@@ -1,12 +1,14 @@
 import torch
 import gin
 import string
-from dataset.scene_text_recognition.helpers import hierarchical_dataset, AlignCollate, Batch_Balanced_Dataset
+
+from dataset.dataset_base import TorchDataset
+from dataset.scene_text_recognition.helpers import hierarchical_dataset, AlignCollate, BatchBalancedDataset
 from absl import logging
 from print_helper import *
 
 @gin.configurable
-class SceneTextRecognitionDataset(object):
+class SceneTextRecognitionDataset(TorchDataset):
     def __init__(self,
                  train_data=None,
                  valid_data=None,
@@ -21,8 +23,13 @@ class SceneTextRecognitionDataset(object):
                  character="0123456789abcdefghijklmnopqrstuvwxyz",
                  is_rgb=True,
                  sensitive=True,
-                 workers=4,
+                 num_cores=4,
                  total_data_usage_ratio=1.0):
+
+        TorchDataset.__init__(self,
+                              data_dir=None,
+                              batch_size=batch_size,
+                              num_cores=num_cores)
 
         if sensitive:
             character = string.printable[:-6]  # same with ASTER setting (use 94 char).
@@ -32,20 +39,20 @@ class SceneTextRecognitionDataset(object):
 
         self._batch_size = batch_size
 
-        self.train_dataset = Batch_Balanced_Dataset(train_data=train_data,
-                                                    select_data=select_data,
-                                                    batch_ratio=batch_ratio,
-                                                    batch_size=batch_size,
-                                                    img_height=img_height,
-                                                    img_width=img_width,
-                                                    is_pad=is_pad,
-                                                    data_filtering_off=data_filtering_off,
-                                                    batch_max_length=batch_max_length,
-                                                    character=character,
-                                                    is_rgb=is_rgb,
-                                                    sensitive=sensitive,
-                                                    workers=workers,
-                                                    total_data_usage_ratio=total_data_usage_ratio)
+        self.train_dataset = BatchBalancedDataset(train_data=train_data,
+                                                  select_data=select_data,
+                                                  batch_ratio=batch_ratio,
+                                                  batch_size=batch_size,
+                                                  img_height=img_height,
+                                                  img_width=img_width,
+                                                  is_pad=is_pad,
+                                                  data_filtering_off=data_filtering_off,
+                                                  batch_max_length=batch_max_length,
+                                                  character=character,
+                                                  is_rgb=is_rgb,
+                                                  sensitive=sensitive,
+                                                  workers=num_cores,
+                                                  total_data_usage_ratio=total_data_usage_ratio)
 
         align_collate_valid = AlignCollate(img_height=img_height,
                                            img_width=img_width,
@@ -59,18 +66,24 @@ class SceneTextRecognitionDataset(object):
                                              img_height=img_height,
                                              img_width=img_width,
                                              sensitive=sensitive)
-                                             # select_data=select_data)
+        # select_data=select_data)
 
         self.valid_loader = torch.utils.data.DataLoader(
             valid_dataset, batch_size=batch_size,
             shuffle=True,  # 'True' to check training progress with validation function.
-            num_workers=int(workers),
+            num_workers=int(num_cores),
             collate_fn=align_collate_valid,
             pin_memory=True)
         print('-' * 80)
 
-    def get_train_dataset(self):
+    def __len__(self):
+        return len(self.train_dataset)
+
+    def _get_train_dataset(self):
         return self.train_dataset
 
-    def get_val_dataset(self):
+    def _get_val_dataset(self):
         return self.valid_loader
+
+    def _get_test_dataset(self):
+        raise NotImplementedError

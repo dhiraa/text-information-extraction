@@ -5,6 +5,23 @@ IMAGE_HEIGHT = 32
 CASE_SENSITIVE = True
 BATCH_SIZE = 96
 
+
+#Experiments
+Experiments.name = "STR"
+Experiments.batch_size=192
+Experiments.num_epochs=10
+Experiments.save_checkpoints_steps=112
+Experiments.keep_checkpoint_max=5
+Experiments.save_summary_steps=5
+Experiments.log_step_count_steps=2
+Experiments.clear_model_data=False
+Experiments.plug_dataset=True
+Experiments.mode='train'
+Experiments.max_steps_without_decrease = 10000
+Experiments.num_max_steps = 50000
+Experiments.validation_interval_steps = 1000
+
+
 #path to training dataset
 SceneTextRecognitionDataset.train_data = "data/scene-text-recognition-datasets/data_lmdb_release/training/"
 SceneTextRecognitionDataset.valid_data = "data/scene-text-recognition-datasets/data_lmdb_release/validation/"
@@ -28,7 +45,7 @@ SceneTextRecognitionDataset.is_rgb = False
 # for sensitive character mode
 SceneTextRecognitionDataset.sensitive = %CASE_SENSITIVE
 # number of data loading workers
-SceneTextRecognitionDataset.workers = 4
+SceneTextRecognitionDataset.num_cores = 4
 #total data usage ratio, this ratio is multiplied to total number of data.
 SceneTextRecognitionDataset.total_data_usage_ratio = 1.0
 SceneTextRecognitionDataset.batch_max_length = 25
@@ -56,3 +73,4 @@ SceneTextRecognitionModel.hidden_size = 256
 SceneTextRecognitionModel.character = "0123456789abcdefghijklmnopqrstuvwxyz"
 SceneTextRecognitionModel.is_sensitive = %CASE_SENSITIVE
 SceneTextRecognitionModel.batch_size = %BATCH_SIZE
+SceneTextRecognitionModel.model_root_directory = "store/SceneTextRecognitionModel/"
