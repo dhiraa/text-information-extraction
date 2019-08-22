@@ -62,10 +62,10 @@ class TorchExecutor(ExecutorBase):
 
     def store_model(self, model, file_name):
 
-        if not os.path.exists(f"./sore/{self._experiment_name}/{model.__class__.__name__}"):
-            os.makedirs(f"./sore/{self._experiment_name}/{model.__class__.__name__}")
+        if not os.path.exists(f"./store/{self._experiment_name}/{model.__class__.__name__}"):
+            os.makedirs(f"./store/{self._experiment_name}/{model.__class__.__name__}")
 
-        torch.save(model, f"./sore/{self._experiment_name}/{model.__class__.__name__}/{file_name}")
+        torch.save(model, f"./store/{self._experiment_name}/{model.__class__.__name__}/{file_name}")
 
     def validation(self, model):
         """ validation or evaluation """
@@ -84,7 +84,7 @@ class TorchExecutor(ExecutorBase):
             length_of_data = length_of_data + batch_size
             image = image_tensors.to(device)
 
-            forward_time, cost, preds_str = self._model.get_predictions(model=model,
+            forward_time, cost, preds_str, labels = self._model.get_predictions(model=model,
                                                                         batch_size=self._dataset._batch_size,
                                                                         image=image,
                                                                         labels=labels)
@@ -124,7 +124,7 @@ class TorchExecutor(ExecutorBase):
         # loss averager
         loss_avg = Averager()
 
-        train_dataset = self._dataset.get_train_dataset()
+        train_dataset = self._dataset.train_set()
         converter = self._model.get_converter()
         # criterion = self._model.get_loss_op()
 
@@ -133,6 +133,7 @@ class TorchExecutor(ExecutorBase):
         best_norm_ED = 1e+6
 
         while (current_step < total_num_steps):
+            print_info("Current step {}".format(current_step))
             # train part
             image_tensors, labels = train_dataset.get_batch()
             image = image_tensors.to(device)
@@ -160,6 +161,10 @@ class TorchExecutor(ExecutorBase):
                 elapsed_time = time.time() - start_time
                 print(f'[{i}/{self._max_train_steps}] Loss: {loss_avg.val():0.5f} elapsed_time: {elapsed_time:0.5f}')
                 # for log
+
+                if not os.path.exists(f"./store/{self._experiment_name}"):
+                    os.makedirs(f"./store/{self._experiment_name}")
+
                 with open(f'./store/{self._experiment_name}/log_train.txt', 'a') as log:
                     log.write(f'[{i}/{self._max_train_steps}] Loss: {loss_avg.val():0.5f} elapsed_time: {elapsed_time:0.5f}\n')
                     loss_avg.reset()
@@ -169,13 +174,13 @@ class TorchExecutor(ExecutorBase):
                         valid_loss, current_accuracy, current_norm_ED, \
                         preds, labels, infer_time, length_of_data = self.validation(model=model)
                     model.train()
-
-                    for pred, gt in zip(preds[:5], labels[:5]):
-                        if 'Attn' in opt.Prediction:
-                            pred = pred[:pred.find('[s]')]
-                            gt = gt[:gt.find('[s]')]
-                        print(f'{pred:20s}, gt: {gt:20s},   {str(pred == gt)}')
-                        log.write(f'{pred:20s}, gt: {gt:20s},   {str(pred == gt)}\n')
+                    #
+                    # for pred, gt in zip(preds[:5], labels[:5]):
+                    #     if 'Attn' in opt.Prediction:
+                    #         pred = pred[:pred.find('[s]')]
+                    #         gt = gt[:gt.find('[s]')]
+                    #     print(f'{pred:20s}, gt: {gt:20s},   {str(pred == gt)}')
+                    #     log.write(f'{pred:20s}, gt: {gt:20s},   {str(pred == gt)}\n')
 
                     valid_log = f'[{i}/{self._max_train_steps}] valid loss: {valid_loss:0.5f}'
                     valid_log += f' accuracy: {current_accuracy:0.3f}, norm_ED: {current_norm_ED:0.2f}'
@@ -185,17 +190,21 @@ class TorchExecutor(ExecutorBase):
                     # keep best accuracy model
                     if current_accuracy > best_accuracy:
                         best_accuracy = current_accuracy
-                        torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/best_accuracy.pth')
+                        #torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/best_accuracy.pth')
+                        self.store_model(file_name="best_accuracy.pth", model=model)
                     if current_norm_ED < best_norm_ED:
                         best_norm_ED = current_norm_ED
-                        torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/best_norm_ED.pth')
+                        #torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/best_norm_ED.pth')
+                        self.store_model(file_name="best_norm_ED.pth", model=model)
+
                     best_model_log = f'best_accuracy: {best_accuracy:0.3f}, best_norm_ED: {best_norm_ED:0.2f}'
                     print(best_model_log)
                     log.write(best_model_log + '\n')
 
             # save model per 1e+5 iter.
             if (i + 1) % 1e+5 == 0:
-                torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/iter_{i + 1}.pth')
+                self.store_model(file_name=f"iter_{i + 1}.pth", model=model)
+                # torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/iter_{i + 1}.pth')
 
             if i == self._max_train_steps:
                 print('end the training')

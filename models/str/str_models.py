@@ -208,8 +208,8 @@ class SceneTextRecognitionModel(nn.Module):
         converter = self.get_converter()
 
         # For max length prediction
-        length_for_pred = torch.IntTensor([batch_max_length] * self._dataset._batch_size).to(device)
-        text_for_pred = torch.LongTensor(self._dataset._batch_size, batch_max_length + 1).fill_(0).to(device)
+        length_for_pred = torch.IntTensor([batch_max_length] * batch_size).to(device)
+        text_for_pred = torch.LongTensor(batch_size, batch_max_length + 1).fill_(0).to(device)
 
         text_for_loss, length_for_loss = converter.encode(labels, batch_max_length=batch_max_length)
 
@@ -246,7 +246,7 @@ class SceneTextRecognitionModel(nn.Module):
             preds_str = converter.decode(preds_index, length_for_pred)
             labels = converter.decode(text_for_loss[:, 1:], length_for_loss)
 
-        return forward_time, cost, preds_str
+        return forward_time, cost, preds_str, labels
 
     def get_accuracy(self, preds_str, labels):
         n_correct = 0
