@@ -23,13 +23,14 @@ from tqdm import tqdm
 from absl import logging
 
 # pylint: disable=too-many-instance-attributes, too-many-arguments
+from engines.executor_base import ExecutorBase
 
 __all__ = [
     "TFExecutor"
 ]
 
 
-class TFExecutor(object):
+class TFExecutor(ExecutorBase):
     """Class that executes training, evaluation, prediction, export, and other
     actions of :tf_main:`tf.estimator.Estimator <estimator/Estimator>`.
 
@@ -71,10 +72,22 @@ class TFExecutor(object):
                  model,
                  dataset,
                  config,
+                 max_train_steps,
+                 validation_interval_steps,
+                 stored_model="",
                  max_steps_without_decrease=1000,
                  train_hooks=None,
                  eval_hooks=None,
                  session_config=None):
+
+        ExecutorBase.__init__(self,
+                              experiment_name=experiment_name,
+                              model=model,
+                              dataset=dataset,
+                              max_train_steps=max_train_steps,
+                              validation_interval_steps=validation_interval_steps,
+                              stored_model=stored_model)
+
         self._experiment_name = experiment_name
         self._model = model
         self._config = config

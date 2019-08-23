@@ -1,6 +1,10 @@
 # text-localization
 Text Localization using Deep Learning 
 
+## Git
+```
+git clone --recursive https://github.com/dhiraa/text-information-extraction
+```
 
 ## Environment Setup
 ```

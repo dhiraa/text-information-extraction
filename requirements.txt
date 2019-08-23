@@ -11,3 +11,4 @@ tensorflow-serving-api
 gin-config
 opencv-python
 shapely
+drive-cli

@@ -19,21 +19,23 @@ class TorchExecutor(ExecutorBase):
                  dataset,
                  max_train_steps,
                  validation_interval_steps,
+                 stored_model="",
                  workers=4):
-        
+
         ExecutorBase.__init__(self,
                               experiment_name=experiment_name,
                               model=model,
                               dataset=dataset,
-                              data_iterator=None,
                               max_train_steps=max_train_steps,
-                              validation_interval_steps=validation_interval_steps)
-        
+                              validation_interval_steps=validation_interval_steps,
+                              stored_model=stored_model)
+
         assert (isinstance(model, torch.nn.Module))
         self._experiment_name = experiment_name
         self._model = model
         self._dataset = dataset
         self._validation_interval_steps = validation_interval_steps
+        self._stored_model = stored_model
 
         cudnn.benchmark = True
         cudnn.deterministic = True
@@ -69,9 +71,7 @@ class TorchExecutor(ExecutorBase):
 
     def validation(self, model):
         """ validation or evaluation """
-        criterion = self._model.get_loss_op()
         evaluation_loader = self._dataset.validation_set()
-        converter = self._model.get_converter()
         n_correct = 0
         norm_ED = 0
         length_of_data = 0
@@ -82,16 +82,16 @@ class TorchExecutor(ExecutorBase):
         for i, (image_tensors, labels) in enumerate(evaluation_loader):
             batch_size = image_tensors.size(0)
             length_of_data = length_of_data + batch_size
-            image = image_tensors.to(device)
+            images = image_tensors.to(device)
 
             forward_time, cost, preds_str, labels = self._model.get_predictions(model=model,
-                                                                        batch_size=self._dataset._batch_size,
-                                                                        image=image,
-                                                                        labels=labels)
+                                                                                batch_size=batch_size,
+                                                                                images=images,
+                                                                                labels=labels)
             infer_time += forward_time
             valid_loss_avg.add(cost)
 
-            n_correct_, norm_ED_ = self._model.get_accuracy(preds_str=preds_str, labels=labels)
+            n_correct_, norm_ED_ = self._model.get_accuracy(features=preds_str, labels=labels)
             n_correct += n_correct_
             norm_ED += norm_ED_
 
@@ -99,14 +99,24 @@ class TorchExecutor(ExecutorBase):
 
         return valid_loss_avg.val(), accuracy, norm_ED, preds_str, labels, infer_time, length_of_data
 
+    def load_model(self, path):
+        model = torch.nn.DataParallel(self._model).to(device)
+        if os.path.exists(path):
+            print(f'loading pretrained model from {self._stored_model}')
+            model.load_state_dict(torch.load(self._stored_model))
+
+        print("Model:")
+        print(model)
+        return model
+
     def train(self, num_max_steps=None, num_epoch=None):
         assert (num_max_steps is not None and num_epoch is not None, "Use steps or epoch at a time")
         model_dir = self._model.model_dir
         # data parallel for multi-GPU
-        model = torch.nn.DataParallel(self._model).to(device)
+        model = self.load_model(self._stored_model)
         model.train()
 
-        num_samples = len(self._dataset)
+        num_samples = len(self._dataset) #TODO replace the dataset with actual
         batch_size = self._dataset._batch_size
 
         num_steps_per_epoch = num_samples // batch_size
@@ -125,32 +135,23 @@ class TorchExecutor(ExecutorBase):
         loss_avg = Averager()
 
         train_dataset = self._dataset.train_set()
-        converter = self._model.get_converter()
-        # criterion = self._model.get_loss_op()
 
         start_time = time.time()
         best_accuracy = -1
-        best_norm_ED = 1e+6
+        best_norm_ed = 1e+6
 
         while (current_step < total_num_steps):
             print_info("Current step {}".format(current_step))
             # train part
             image_tensors, labels = train_dataset.get_batch()
-            image = image_tensors.to(device)
-            print_info(labels)
-            text, length = converter.encode(labels, batch_max_length=25) #self.batch_max_length)
-            batch_size = image.size(0)
-
-            feature = dict()
-            label = dict()
-            feature["image"], label["text"], label["length"] = image, text, length
-            cost = self._model.get_cost(model=self._model, feature=feature, label=label)
-
+            images = image_tensors.to(device)
+            cost = self._model.get_cost(model=self._model, features=images, labels=labels)
             optimizer = self._model.get_optimizer(model=model)
 
             model.zero_grad()
             cost.backward()
-            grad_clip = 5
+            grad_clip = 5 #TODO make as a param
+
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)  # gradient clipping with 5 (Default)
             optimizer.step()
 
@@ -171,7 +172,7 @@ class TorchExecutor(ExecutorBase):
 
                     model.eval()
                     with torch.no_grad():
-                        valid_loss, current_accuracy, current_norm_ED, \
+                        valid_loss, current_accuracy, current_norm_ed, \
                         preds, labels, infer_time, length_of_data = self.validation(model=model)
                     model.train()
                     #
@@ -183,28 +184,25 @@ class TorchExecutor(ExecutorBase):
                     #     log.write(f'{pred:20s}, gt: {gt:20s},   {str(pred == gt)}\n')
 
                     valid_log = f'[{i}/{self._max_train_steps}] valid loss: {valid_loss:0.5f}'
-                    valid_log += f' accuracy: {current_accuracy:0.3f}, norm_ED: {current_norm_ED:0.2f}'
+                    valid_log += f' accuracy: {current_accuracy:0.3f}, norm_ED: {current_norm_ed:0.2f}'
                     print(valid_log)
                     log.write(valid_log + '\n')
 
                     # keep best accuracy model
                     if current_accuracy > best_accuracy:
                         best_accuracy = current_accuracy
-                        #torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/best_accuracy.pth')
                         self.store_model(file_name="best_accuracy.pth", model=model)
-                    if current_norm_ED < best_norm_ED:
-                        best_norm_ED = current_norm_ED
-                        #torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/best_norm_ED.pth')
-                        self.store_model(file_name="best_norm_ED.pth", model=model)
+                    if current_norm_ed < best_norm_ed:
+                        best_norm_ed = current_norm_ed
+                        self.store_model(file_name="best_norm_ed.pth", model=model)
 
-                    best_model_log = f'best_accuracy: {best_accuracy:0.3f}, best_norm_ED: {best_norm_ED:0.2f}'
+                    best_model_log = f'best_accuracy: {best_accuracy:0.3f}, best_norm_ed: {best_norm_ed:0.2f}'
                     print(best_model_log)
                     log.write(best_model_log + '\n')
 
             # save model per 1e+5 iter.
             if (i + 1) % 1e+5 == 0:
                 self.store_model(file_name=f"iter_{i + 1}.pth", model=model)
-                # torch.save(model.state_dict(), f'./saved_models/{self._experiment_name}/iter_{i + 1}.pth')
 
             if i == self._max_train_steps:
                 print('end the training')
@@ -212,3 +210,26 @@ class TorchExecutor(ExecutorBase):
 
             i += 1
             current_step += 1
+
+    def predict_directory(self, in_path, out_path):
+        multi_gpu_model = self.load_model(self._stored_model)
+        dataset = self._dataset.serving_set(file_or_path=in_path)
+
+        # predict
+        multi_gpu_model.eval()
+        with torch.no_grad():
+            for image_tensors, image_path_list in dataset:
+                batch_size = image_tensors.size(0)
+                images = image_tensors.to(device)
+                preds_str = self._model.get_predictions(model=multi_gpu_model,
+                                                        batch_size=batch_size,
+                                                        images=images,
+                                                        labels=None)
+
+                print('-' * 80)
+                print('image_path\tpredicted_labels')
+                print('-' * 80)
+
+                for img_name, pred in zip(image_path_list, preds_str):
+                    print(f'{img_name}\t{pred}')
+

@@ -15,15 +15,25 @@
 Base class for models.
 """
 import os
+import torch.nn as nn
 
 # pylint: disable=too-many-arguments
 
 __all__ = [
-    "ModelBase"
+    "TFModelBase"
 ]
 
-
 class ModelBase(object):
+    def _get_loss(self, labels, logits):
+        raise NotImplementedError
+
+    def _get_optimizer(self, loss):
+        raise NotImplementedError
+
+class TorchModelBase(ModelBase, nn.Module):
+    pass
+
+class TFModelBase(ModelBase):
     """Base class inherited by all model classes.
 
     A model class implements interfaces that are compatible with
@@ -61,12 +71,6 @@ class ModelBase(object):
                             type(self).__name__)
 
     def _build_layers(self, features, mode):
-        raise NotImplementedError
-
-    def _get_loss(self, labels, logits):
-        raise NotImplementedError
-
-    def _get_optimizer(self, loss):
         raise NotImplementedError
 
     def _get_eval_metrics(self, predictions, labels):

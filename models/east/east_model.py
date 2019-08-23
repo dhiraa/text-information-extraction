@@ -2,7 +2,7 @@ import os
 import numpy as np
 import tensorflow as tf
 import gin
-from models.model_base import ModelBase
+from models.model_base import TFModelBase
 
 from absl import logging
 
@@ -336,7 +336,7 @@ def average_gradients(tower_grads):
 # -----------------------------------------------------------------------------------------------------------
 
 @gin.configurable
-class EASTModel(ModelBase):
+class EASTTFModel(TFModelBase):
     def __init__(self,
                  learning_rate=0.0001,
                  model_root_directory=gin.REQUIRED,

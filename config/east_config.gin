@@ -11,7 +11,6 @@ Experiments.save_summary_steps=5
 Experiments.log_step_count_steps=2
 Experiments.clear_model_data=False
 Experiments.plug_dataset=True
-Experiments.mode='train'
 Experiments.max_steps_without_decrease = 10000
 Experiments.num_max_steps = 50000
 

@@ -8,7 +8,7 @@ import tensorflow as tf
 sys.path.append(".")
 
 from dataset.icdar.icdar_data import ICDARTFDataset
-from models.east.east_model import EASTModel
+from models.east.east_model import EASTTFModel
 from engines.experiments import Experiments
 
 from absl import logging
@@ -22,7 +22,7 @@ def main(args):
     dataset = ICDARTFDataset()
     dataset.preprocess()
 
-    model = EASTModel()
+    model = EASTTFModel()
     print(model)
 
     experiment = Experiments(name="EAST", dataset=dataset, model=model)

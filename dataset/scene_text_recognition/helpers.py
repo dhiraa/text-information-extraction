@@ -343,22 +343,26 @@ class BatchBalancedDataset(object):
 class RawDataset(Dataset):
 
     def __init__(self,
-                 root,
+                 file_or_path,
                  is_rgb,
                  img_height,
                  img_width):
         self.is_rgb = is_rgb
         self.img_height, self.img_width = img_height, img_width
         self.image_path_list = []
-        for dirpath, dirnames, filenames in os.walk(root):
-            for name in filenames:
-                _, ext = os.path.splitext(name)
-                ext = ext.lower()
-                if ext == '.jpg' or ext == '.jpeg' or ext == '.png':
-                    self.image_path_list.append(os.path.join(dirpath, name))
+        if os.path.isdir(file_or_path):
+            for dirpath, dirnames, filenames in os.walk(file_or_path):
+                for name in filenames:
+                    _, ext = os.path.splitext(name)
+                    ext = ext.lower()
+                    if ext == '.jpg' or ext == '.jpeg' or ext == '.png':
+                        self.image_path_list.append(os.path.join(dirpath, name))
 
-        self.image_path_list = natsorted(self.image_path_list)
-        self.nSamples = len(self.image_path_list)
+            self.image_path_list = natsorted(self.image_path_list)
+            self.nSamples = len(self.image_path_list)
+        else:
+            self.image_path_list.append(file_or_path)
+            self.nSamples = len(self.image_path_list)
 
     def __len__(self):
         return self.nSamples

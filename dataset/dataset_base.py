@@ -29,6 +29,9 @@ class DatasetBase(object):
         """
         return self._get_test_dataset()
 
+    def serving_set(self, file_or_path):
+        return self._get_serving_dataset(file_or_path=file_or_path)
+
     def _get_train_dataset(self):
         raise NotImplementedError
 
@@ -38,6 +41,8 @@ class DatasetBase(object):
     def _get_test_dataset(self):
         raise NotImplementedError
 
+    def _get_serving_dataset(self, file_or_path):
+        raise NotImplementedError
 
 class TensorFlowDataset(DatasetBase):
     def __init__(self,

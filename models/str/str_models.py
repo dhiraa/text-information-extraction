@@ -11,6 +11,7 @@ from nltk.metrics.distance import edit_distance
 import numpy as np
 
 from dataset.scene_text_recognition.str_dataset import SceneTextRecognitionDataset
+from models.model_base import TorchModelBase
 from models.str.modules.transformation import TPS_SpatialTransformerNetwork
 from models.str.modules.feature_extraction import VGG_FeatureExtractor, RCNN_FeatureExtractor, ResNet_FeatureExtractor
 from models.str.modules.sequence_modeling import BidirectionalLSTM
@@ -20,7 +21,7 @@ from dataset.scene_text_recognition.utils import AttnLabelConverter, Averager, C
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 @gin.configurable
-class SceneTextRecognitionModel(nn.Module):
+class SceneTextRecognitionModel(TorchModelBase):
 
     def __init__(self,
                  transformation_stage="TPS",
@@ -144,12 +145,17 @@ class SceneTextRecognitionModel(nn.Module):
 
         return criterion
 
-    def get_cost(self, model, feature, label):
+    def get_cost(self, model, features, labels):
         assert (isinstance(model, SceneTextRecognitionModel))
+
+        converter = model.get_converter()
+
+        text, length = converter.encode(labels, batch_max_length=25) #self.batch_max_length)
+        batch_size = features.size(0)
 
         criterion = self.get_loss_op()
 
-        image, text, length = feature["image"], label["text"], label["length"]
+        image, text, length = features, text, length
         if 'CTC' in self.stages["prediction_stage"]:
             preds = model(image, text).log_softmax(2)
             preds_size = torch.IntTensor([preds.size(1)] * self.batch_size).to(device)
@@ -199,8 +205,7 @@ class SceneTextRecognitionModel(nn.Module):
 
         return optimizer
 
-
-    def get_predictions(self, model, batch_size, image, labels):
+    def get_predictions(self, model, batch_size, images, labels=None):
         start_time = time.time()
 
         criterion = self.get_loss_op()
@@ -213,46 +218,76 @@ class SceneTextRecognitionModel(nn.Module):
 
         text_for_loss, length_for_loss = converter.encode(labels, batch_max_length=batch_max_length)
 
+        if labels:
 
-        if 'CTC' in self.stages["prediction_stage"]:
-            preds = model(image, text_for_pred).log_softmax(2)
-            forward_time = time.time() - start_time
+            if 'CTC' in self.stages["prediction_stage"]:
+                preds = model(images, text_for_pred).log_softmax(2)
+                forward_time = time.time() - start_time
 
-            # Calculate evaluation loss for CTC deocder.
-            preds_size = torch.IntTensor([preds.size(1)] * batch_size)
-            preds = preds.permute(1, 0, 2)  # to use CTCloss format
+                # Calculate evaluation loss for CTC deocder.
+                preds_size = torch.IntTensor([preds.size(1)] * batch_size)
+                preds = preds.permute(1, 0, 2)  # to use CTCloss format
 
-            # To avoid ctc_loss issue, disabled cudnn for the computation of the ctc_loss
-            # https://github.com/jpuigcerver/PyLaia/issues/16
-            torch.backends.cudnn.enabled = False
-            cost = criterion(preds, text_for_loss, preds_size, length_for_loss)
-            torch.backends.cudnn.enabled = True
+                # To avoid ctc_loss issue, disabled cudnn for the computation of the ctc_loss
+                # https://github.com/jpuigcerver/PyLaia/issues/16
+                torch.backends.cudnn.enabled = False
+                cost = criterion(preds, text_for_loss, preds_size, length_for_loss)
+                torch.backends.cudnn.enabled = True
 
-            # Select max probabilty (greedy decoding) then decode index to character
-            _, preds_index = preds.max(2)
-            preds_index = preds_index.transpose(1, 0).contiguous().view(-1)
-            preds_str = converter.decode(preds_index.data, preds_size.data)
+                # Select max probabilty (greedy decoding) then decode index to character
+                _, preds_index = preds.max(2)
+                preds_index = preds_index.transpose(1, 0).contiguous().view(-1)
+                preds_str = converter.decode(preds_index.data, preds_size.data)
 
-        else:
-            preds = model(image, text_for_pred, is_train=False)
-            forward_time = time.time() - start_time
+            else:
+                preds = model(images, text_for_pred, is_train=False)
+                forward_time = time.time() - start_time
 
-            preds = preds[:, :text_for_loss.shape[1] - 1, :]
-            target = text_for_loss[:, 1:]  # without [GO] Symbol
-            cost = criterion(preds.contiguous().view(-1, preds.shape[-1]), target.contiguous().view(-1))
+                preds = preds[:, :text_for_loss.shape[1] - 1, :]
+                target = text_for_loss[:, 1:]  # without [GO] Symbol
+                cost = criterion(preds.contiguous().view(-1, preds.shape[-1]), target.contiguous().view(-1))
 
-            # select max probabilty (greedy decoding) then decode index to character
-            _, preds_index = preds.max(2)
-            preds_str = converter.decode(preds_index, length_for_pred)
-            labels = converter.decode(text_for_loss[:, 1:], length_for_loss)
+                # select max probabilty (greedy decoding) then decode index to character
+                _, preds_index = preds.max(2)
+                preds_str = converter.decode(preds_index, length_for_pred)
+                labels = converter.decode(text_for_loss[:, 1:], length_for_loss)
 
-        return forward_time, cost, preds_str, labels
+            return forward_time, cost, preds_str, labels
 
-    def get_accuracy(self, preds_str, labels):
+        else: #TODO clean later
+            # For max length prediction
+            # length_for_pred = torch.IntTensor([opt.batch_max_length] * batch_size).to(device)
+            # text_for_pred = torch.LongTensor(batch_size, opt.batch_max_length + 1).fill_(0).to(device)
+
+            if 'CTC' in self.stages["prediction_stage"]:
+                preds = model(images, text_for_pred).log_softmax(2)
+
+                # Select max probabilty (greedy decoding) then decode index to character
+                preds_size = torch.IntTensor([preds.size(1)] * batch_size)
+                _, preds_index = preds.permute(1, 0, 2).max(2)
+                preds_index = preds_index.transpose(1, 0).contiguous().view(-1)
+                preds_str = converter.decode(preds_index.data, preds_size.data)
+
+            else:
+                preds = model(images, text_for_pred, is_train=False)
+
+                # select max probabilty (greedy decoding) then decode index to character
+                _, preds_index = preds.max(2)
+                preds_str = converter.decode(preds_index, length_for_pred)
+
+            preds_str_cleaned = []
+            for pred in preds_str:
+                if 'Attn' in self.stages["prediction_stage"]:
+                    pred = pred[:pred.find('[s]')]  # prune after "end of sentence" token ([s])
+                    preds_str_cleaned.append(pred)
+
+            return preds_str_cleaned
+
+    def get_accuracy(self, features, labels):
         n_correct = 0
         norm_ED = 0
         # calculate accuracy.
-        for pred, gt in zip(preds_str, labels):
+        for pred, gt in zip(features, labels):
             if 'Attn' in self.stages["prediction_stage"]:
                 pred = pred[:pred.find('[s]')]  # prune after "end of sentence" token ([s])
                 gt = gt[:gt.find('[s]')]
@@ -265,3 +300,5 @@ class SceneTextRecognitionModel(nn.Module):
                 norm_ED += edit_distance(pred, gt) / len(gt)
 
         return n_correct, norm_ED
+
+

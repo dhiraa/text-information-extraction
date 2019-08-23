@@ -16,10 +16,9 @@ Experiments.save_summary_steps=5
 Experiments.log_step_count_steps=2
 Experiments.clear_model_data=False
 Experiments.plug_dataset=True
-Experiments.mode='train'
-Experiments.max_steps_without_decrease = 10000
-Experiments.num_max_steps = 50000
-Experiments.validation_interval_steps = 1000
+Experiments.max_steps_without_decrease = 100000
+Experiments.num_max_steps = 300000
+Experiments.validation_interval_steps = 2000
 
 
 #path to training dataset

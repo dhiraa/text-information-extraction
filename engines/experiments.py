@@ -20,10 +20,7 @@ from engines.torch_executor import TorchExecutor
 @gin.configurable
 class Experiments(object):
     """
-    Experiments uses dataset, data iterator & model factory classes and import them
-    dynamically based on the string.
-    This allows the user to choose the modules dynamically and run the experiments without ever writing the
-    code when we need mix and experiment dataset and modules.
+    Experiments uses dataset, model classes and training params to carry out Deep Learning experiments
     """
 
     def __init__(self,
@@ -39,7 +36,6 @@ class Experiments(object):
                  log_step_count_steps=10,
                  clear_model_data=False,
                  plug_dataset=True,
-                 mode='train',
                  batch_size=8,
                  max_steps_without_decrease=1000,
                  random_seed=42):
@@ -51,8 +47,6 @@ class Experiments(object):
         torch.manual_seed(random_seed)
         torch.cuda.manual_seed(random_seed)
         
-        self.mode = mode
-
         self._name = name
 
         self.num_epochs = num_epochs
@@ -96,13 +90,10 @@ class Experiments(object):
                 print("Batch {} =>  Shape of feature : {} is {}".format(i, key, features[key].shape))
                 i = i + 1
 
-    def run(self):
-        # num_samples = self._data_iterator.num_train_examples
-        # print_info("Number of training samples : {}".format(num_samples))
-        # batch_size = self.batch_size
-        num_epochs = self.num_epochs
-        mode = self.mode
-
+    def run(self,
+            mode="train",
+            inference_file_or_path="",
+            out_files_path=""):
         if mode == "test_iterator":
             self.test_iterator()
 
@@ -118,16 +109,12 @@ class Experiments(object):
                                   model=self._model,
                                   dataset=self._dataset,
                                   config=self._run_config,
-                                  max_steps_without_decrease=self.max_steps_without_decrease)
+                                  max_steps_without_decrease=self.max_steps_without_decrease,
+                                  max_train_steps=self._num_max_steps,
+                                  validation_interval_steps=self._validation_interval_steps)
 
         if mode in ["train", "retrain"]:
-            for current_epoch in tqdm(range(num_epochs), desc="Epoch"):
-                # current_max_steps = (num_samples // batch_size) * (current_epoch + 1)
-                # print("\n\n Training for epoch {} with steps {}\n\n".format(current_epoch, current_max_steps))
-                executor.train(num_max_steps=self._num_max_steps)
-                # print("\n\n Evaluating for epoch\n\n", current_epoch)
-                # executor.evaluate()
-                # executor.export_model(self._model.model_dir + "/exported/")
-        else:
-            print_error("Given mode is not available!")
+            executor.train(num_max_steps=self._num_max_steps)
+        elif mode in ["serving"]:
+            executor.predict_directory(in_path=inference_file_or_path, out_path=out_files_path)
 
