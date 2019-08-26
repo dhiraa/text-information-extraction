@@ -800,7 +800,7 @@ def image_2_data(image_file_path,
         # print_shape(score_map, "score_map")
         # print_shape(geo_map, "geo_map")
         # print_shape(training_mask, "training_mask")
-        return image, score_map, geo_map, training_mask
+        return image, score_map, geo_map#, training_mask
 
     except Exception as e:
         import traceback

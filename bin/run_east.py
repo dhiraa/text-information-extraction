@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding: utf-8
 import sys
 import gin
 import time
@@ -20,7 +22,6 @@ def main(args):
     print('Running Experiment:')
     print(' -' * 35)
     dataset = ICDARTFDataset()
-    dataset.preprocess()
 
     model = EASTTFModel()
     print(model)

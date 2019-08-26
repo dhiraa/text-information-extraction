@@ -18,10 +18,16 @@ Experiments.num_max_steps = 50000
 # DataSet
 ICDARTFDataset.data_dir = "data/icdar-2019-data/"
 ICDARTFDataset.out_dir = "out-data/icdar-2019-data/"
+ICDARTFDataset.max_image_large_side = 1280
+ICDARTFDataset.max_text_size = 800
+ICDARTFDataset.min_text_size = 5
+ICDARTFDataset.min_crop_side_ratio = 0.1
+ICDARTFDataset.geometry = "RBOX"
+ICDARTFDataset.number_images_per_tfrecords = 8
+ICDARTFDataset.num_cores = 4
 ICDARTFDataset.batch_size = 4
 ICDARTFDataset.prefetch_size = 1
-ICDARTFDataset.num_cores = 4
 
 # Model
-EASTModel.model_root_directory = "store/east/"
-EASTModel.learning_rate = 0.001
+EASTTFModel.model_root_directory = "store/east/"
+EASTTFModel.learning_rate = 0.001

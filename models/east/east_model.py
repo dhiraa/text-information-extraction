@@ -6,11 +6,14 @@ from models.model_base import TFModelBase
 
 from absl import logging
 
+from print_helper import print_info, print_warn
+
 layers = tf.keras.layers
 models = tf.keras.models
 keras_utils = tf.keras.utils
 
-
+# https://arxiv.org/pdf/1701.02362.pdf -> Resnet Visulization
+# http://ethereon.github.io/netscope/#/gist/db945b393d40bfa26006
 def identity_block(input_tensor, kernel_size, filters, stage, block):
     """The identity block is the block that has no conv layer at shortcut.
 
@@ -25,38 +28,47 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
     # Returns
         Output tensor for the block.
     """
+    print_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> identity block")
     filters1, filters2, filters3 = filters
     bn_axis = 3
-
-    #
-    # if backend.image_data_format() == 'channels_last':
-    #     bn_axis = 3
-    # else:
-    #     bn_axis = 1
 
     conv_name_base = 'res' + str(stage) + block + '_branch'
     bn_name_base = 'bn' + str(stage) + block + '_branch'
 
+    print_info(input_tensor)
+    # >>>>>>>>>>>>>>>>>
     x = layers.Conv2D(filters1, (1, 1),
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2a')(input_tensor)
+    print_info(x)
     x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+    print_info(x)
     x = layers.Activation('relu')(x)
+    print_info(x)
 
+    # >>>>>>>>>>>>>>>>>
     x = layers.Conv2D(filters2, kernel_size,
                       padding='same',
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2b')(x)
+    print_info(x)
     x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+    print_info(x)
     x = layers.Activation('relu')(x)
+    print_info(x)
 
+    # >>>>>>>>>>>>>>>>>
     x = layers.Conv2D(filters3, (1, 1),
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2c')(x)
+    print_info(x)
     x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
-
+    print_info(x)
     x = layers.add([x, input_tensor])
+    print_info(x)
     x = layers.Activation('relu')(x)
+    print_info(x)
+
     return x
 
 
@@ -84,40 +96,56 @@ def conv_block(input_tensor,
     the first conv layer at main path is with strides=(2, 2)
     And the shortcut should have strides=(2, 2) as well
     """
+    print_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> conv block")
+
     filters1, filters2, filters3 = filters
-    # if backend.image_data_format() == 'channels_last':
-    #     bn_axis = 3
-    # else:
-    #     bn_axis = 1
+
     bn_axis = 3
     conv_name_base = 'res' + str(stage) + block + '_branch'
     bn_name_base = 'bn' + str(stage) + block + '_branch'
 
+    print_info(input_tensor)
+    # >>>>>>>>>>>>>>>>>
     x = layers.Conv2D(filters1, (1, 1), strides=strides,
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2a')(input_tensor)
+    print_info(x)
     x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+    print_info(x)
     x = layers.Activation('relu')(x)
+    print_info(x)
 
+    # >>>>>>>>>>>>>>>>>
     x = layers.Conv2D(filters2, kernel_size, padding='same',
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2b')(x)
+    print_info(x)
     x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+    print_info(x)
     x = layers.Activation('relu')(x)
+    print_info(x)
 
+    # >>>>>>>>>>>>>>>>>
     x = layers.Conv2D(filters3, (1, 1),
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2c')(x)
+    print_info(x)
     x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
+    print_info(x)
 
+    # >>>>>>>>>>>>>>>>>
     shortcut = layers.Conv2D(filters3, (1, 1), strides=strides,
                              kernel_initializer='he_normal',
                              name=conv_name_base + '1')(input_tensor)
-    shortcut = layers.BatchNormalization(
-        axis=bn_axis, name=bn_name_base + '1')(shortcut)
+    print_info(shortcut)
+    shortcut = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '1')(shortcut)
+    print_info(shortcut)
 
     x = layers.add([x, shortcut])
+    print_info(x)
     x = layers.Activation('relu')(x)
+    print_info(x)
+
     return x
 
 def unpool(inputs):
@@ -150,43 +178,71 @@ def model(images, text_scale=512, weight_decay=1e-5, is_training=True):
 
     end_points = dict()
 
+    print_warn(">>>>>>>>>>>>>>> Model Definition Started: ")
+    print_warn(images)
     # http://ethereon.github.io/netscope/#/gist/db945b393d40bfa26006
     x = layers.ZeroPadding2D(padding=(3, 3), name='conv1_pad')(images)
+    print_warn(x)
     x = layers.Conv2D(64, (7, 7),
                       strides=(2, 2),
                       padding='valid',
                       kernel_initializer='he_normal',
                       name='conv1')(x)
+    print_warn(x)
     x = layers.BatchNormalization(axis=bn_axis, name='bn_conv1')(x)
+    print_warn(x)
     x = layers.Activation('relu')(x)
+    print_warn(x)
     x = layers.ZeroPadding2D(padding=(1, 1), name='pool1_pad')(x)
+    print_warn(x)
     x = layers.MaxPooling2D((3, 3), strides=(2, 2))(x)
+    print_warn(x)
 
+    print_warn(">>>>>>>>>>>>>>> Resnet Definition Started: ")
+    print_warn(">>>>> pool2")
     x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
+    print_warn(x)
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='b')
+    print_warn(x)
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='c')
+    print_warn(x)
 
     end_points["pool2"] = x
 
+    print_warn(">>>>> pool3")
     x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
+    print_warn(x)
     x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
+    print_warn(x)
     x = identity_block(x, 3, [128, 128, 512], stage=3, block='c')
+    print_warn(x)
     x = identity_block(x, 3, [128, 128, 512], stage=3, block='d')
-
+    print_warn(x)
     end_points["pool3"] = x
 
-    x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
+    print_warn(">>>>> pool4")
 
+    x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a')
+    print_warn(x)
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b')
+    print_warn(x)
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c')
+    print_warn(x)
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d')
+    print_warn(x)
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
+    print_warn(x)
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
+    print_info(x)
     end_points["pool4"] = x
 
+    print_warn(">>>>> pool5")
     x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
+    print_warn(x)
     x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
+    print_warn(x)
     x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
+    print_warn(x)
 
     end_points["pool5"] = x
 
@@ -206,12 +262,12 @@ def model(images, text_scale=512, weight_decay=1e-5, is_training=True):
         else:
             c1_1 = layers.Conv2D(filters=num_outputs[i], kernel_size=1)(tf.concat([g[i - 1], f[i]], axis=-1))
             # slim.conv2d(tf.concat([g[i-1], f[i]], axis=-1), num_outputs[i], 1)
-            h[i] = layers.Conv2D(filters=num_outputs[i], kernel_size=1)(c1_1)
+            h[i] = layers.Conv2D(filters=num_outputs[i], kernel_size=3, padding="same")(c1_1) #TODO kernel size to 3
             # slim.conv2d(c1_1, num_outputs[i], 3)
         if i <= 2:
             g[i] = unpool(h[i])
         else:
-            g[i] = layers.Conv2D(filters=num_outputs[i], kernel_size=1)(h[i])
+            g[i] = layers.Conv2D(filters=num_outputs[i], kernel_size=3, padding="same")(h[i]) #TODO kernel size to 3
             # slim.conv2d(h[i], num_outputs[i], 3)
         logging.info('Shape of h_{} : {}, g_{} : {}'.format(i, h[i].shape, i, g[i].shape))
 
@@ -230,7 +286,7 @@ def model(images, text_scale=512, weight_decay=1e-5, is_training=True):
     return F_score, F_geometry
 
 
-def dice_coefficient(y_true_cls, y_pred_cls, training_mask):
+def dice_coefficient(y_true_cls, y_pred_cls):#, training_mask):
     """
     dice loss
     :param y_true_cls:
@@ -256,8 +312,8 @@ def dice_coefficient(y_true_cls, y_pred_cls, training_mask):
 def get_loss(y_true_cls,
              y_pred_cls,
              y_true_geo,
-             y_pred_geo,
-             training_mask):
+             y_pred_geo):
+             # training_mask):
     """
     define the loss used for training, contraning two part,
     the first part we use dice loss instead of weighted logloss,
@@ -284,7 +340,7 @@ def get_loss(y_true_cls,
      left boundary of its corresponding rectangle, respectively. 
     """
 
-    classification_loss = dice_coefficient(y_true_cls, y_pred_cls, training_mask)
+    classification_loss = dice_coefficient(y_true_cls, y_pred_cls)#, training_mask)
 
     # scale classification loss to match the iou loss part
     classification_loss *= 0.01
@@ -421,13 +477,13 @@ class EASTTFModel(TFModelBase):
         if mode != tf.estimator.ModeKeys.PREDICT:
             input_score_maps = features['score_maps']
             input_geo_maps = features['geo_maps']
-            input_training_masks = features['training_masks']
+            # input_training_masks = features['training_masks']
 
             model_loss = get_loss(input_score_maps,
                                   f_score,
                                   input_geo_maps,
-                                  f_geometry,
-                                  input_training_masks)
+                                  f_geometry)#,
+                                  # input_training_masks)
             loss = tf.add_n(
                 [model_loss] + tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES))
 
@@ -439,7 +495,7 @@ class EASTTFModel(TFModelBase):
             tf.compat.v1.summary.image('score_map_pred', f_score * 255)
             tf.compat.v1.summary.image('geo_map_0', input_geo_maps[:, :, :, 0:1])
             tf.compat.v1.summary.image('geo_map_0_pred', f_geometry[:, :, :, 0:1])
-            tf.compat.v1.summary.image('training_masks', input_training_masks)
+            # tf.compat.v1.summary.image('training_masks', input_training_masks)
             tf.summary.scalar('model_loss', model_loss)
             tf.summary.scalar('total_loss', loss)
 
