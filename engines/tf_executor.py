@@ -24,6 +24,7 @@ from absl import logging
 
 # pylint: disable=too-many-instance-attributes, too-many-arguments
 from engines.executor_base import ExecutorBase
+from print_helper import print_error
 
 __all__ = [
     "TFExecutor"
@@ -96,8 +97,7 @@ class TFExecutor(ExecutorBase):
         self._eval_hooks = eval_hooks
         self._session_config = session_config
 
-        self._estimator = tf.estimator.Estimator(
-            model_fn=self._model, config=config, params=None)
+        self._estimator = tf.estimator.Estimator(model_fn=self._model, config=config, params=None)
 
         hook = tf.estimator.experimental.stop_if_no_decrease_hook(self._estimator,
                                                                   "loss",
@@ -140,11 +140,12 @@ class TFExecutor(ExecutorBase):
         <estimator/Estimator#train>` for more details.
 
         Args:
-            max_steps (int, optional): Total number of steps for which
+            num_max_steps (int, optional): Total number of steps for which
                 to train model. If `None`, train forever or until the train
                 data generates the OutOfRange exception. If OutOfRange occurs
                 in the middle, training stops before :attr:`max_steps` steps.
         """
+        print_error(num_max_steps)
         train_spec = self._get_train_spec(max_steps=num_max_steps)
         self._estimator.train(
             input_fn=train_spec.input_fn,

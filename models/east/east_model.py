@@ -371,7 +371,6 @@ def get_loss(y_true_cls,
     return tf.reduce_mean(L_g * y_true_cls) + classification_loss
 
 
-
 def average_gradients(tower_grads):
     average_grads = []
     for grad_and_vars in zip(*tower_grads):

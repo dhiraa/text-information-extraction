@@ -2,20 +2,17 @@
 # coding: utf-8
 import sys
 import gin
-import time
 import argparse
-from tqdm import tqdm
-import tensorflow as tf
-
 sys.path.append(".")
 
 from dataset.icdar.icdar_data import ICDARTFDataset
 from models.east.east_model import EASTTFModel
 from engines.experiments import Experiments
-
+import tensorflow as tf
 from absl import logging
+logging.set_verbosity(logging.INFO)
 
-
+# tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
 def main(args):
     print(' -' * 35)

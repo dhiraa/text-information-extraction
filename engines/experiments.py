@@ -36,7 +36,6 @@ class Experiments(object):
                  log_step_count_steps=10,
                  clear_model_data=False,
                  plug_dataset=True,
-                 batch_size=8,
                  max_steps_without_decrease=1000,
                  random_seed=42):
 
@@ -46,10 +45,10 @@ class Experiments(object):
         np.random.seed(random_seed)
         torch.manual_seed(random_seed)
         torch.cuda.manual_seed(random_seed)
-        
+
         self._name = name
 
-        self.num_epochs = num_epochs
+        self._num_epochs = num_epochs
         self._num_max_steps = num_max_steps
         self._dataset = dataset
         self._model = model
@@ -59,7 +58,6 @@ class Experiments(object):
         self.log_step_count_steps = log_step_count_steps
         self.clear_model_data = clear_model_data
         self.plug_dataset = plug_dataset
-        self.batch_size = batch_size
         self.max_steps_without_decrease = max_steps_without_decrease
         self._validation_interval_steps = validation_interval_steps
 
@@ -103,6 +101,11 @@ class Experiments(object):
                                      dataset=self._dataset,
                                      max_train_steps=self._num_max_steps,
                                      validation_interval_steps=self._validation_interval_steps)
+            if mode in ["train", "retrain"]:
+                executor.train(num_max_steps=self._num_max_steps)
+            elif mode in ["serving"]:
+                executor.predict_directory(in_path=inference_file_or_path, out_path=out_files_path)
+
         else:
             self._init_tf_config()
             executor = TFExecutor(experiment_name=self._name,
@@ -113,8 +116,10 @@ class Experiments(object):
                                   max_train_steps=self._num_max_steps,
                                   validation_interval_steps=self._validation_interval_steps)
 
-        if mode in ["train", "retrain"]:
-            executor.train(num_max_steps=self._num_max_steps)
-        elif mode in ["serving"]:
-            executor.predict_directory(in_path=inference_file_or_path, out_path=out_files_path)
+            if mode in ["train", "retrain"]:
+                for epoch in tqdm(range(self._num_epochs), desc="epoch"):
+                    executor.train_and_evaluate(max_train_steps=self._num_max_steps,
+                                                eval_steps=None)
+            elif mode in ["serving"]:
+                executor.predict_directory(in_path=inference_file_or_path, out_path=out_files_path)
 

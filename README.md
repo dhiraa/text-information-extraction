@@ -18,6 +18,10 @@ pip install -r requirements
 
 conda activate tie
 
+#check GPU
+ipython
+from tensorflow.python.client import device_lib
+
 ```
 
 ## Dataset  

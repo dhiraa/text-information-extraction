@@ -3,16 +3,16 @@ import config.east_imports
 
 #Experiments
 Experiments.name = "EAST"
-Experiments.batch_size=8
-Experiments.num_epochs=100
-Experiments.save_checkpoints_steps=112
-Experiments.keep_checkpoint_max=5
-Experiments.save_summary_steps=5
-Experiments.log_step_count_steps=2
-Experiments.clear_model_data=False
-Experiments.plug_dataset=True
-Experiments.max_steps_without_decrease = 10000
-Experiments.num_max_steps = 50000
+Experiments.num_epochs = 100
+Experiments.save_checkpoints_steps = 112
+Experiments.keep_checkpoint_max = 5
+Experiments.save_summary_steps = 5
+Experiments.log_step_count_steps = 2
+Experiments.clear_model_data = False
+Experiments.plug_dataset = True
+Experiments.max_steps_without_decrease = 2000
+Experiments.num_max_steps = 13600
+Experiments.validation_interval_steps = 100
 
 
 # DataSet

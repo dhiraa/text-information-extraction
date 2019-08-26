@@ -9,10 +9,10 @@ from dataset.scene_text_recognition.utils import Averager
 from engines.executor_base import ExecutorBase
 from print_helper import print_info
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class TorchExecutor(ExecutorBase):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     def __init__(self,
                  experiment_name,
                  model,
@@ -82,7 +82,7 @@ class TorchExecutor(ExecutorBase):
         for i, (image_tensors, labels) in enumerate(evaluation_loader):
             batch_size = image_tensors.size(0)
             length_of_data = length_of_data + batch_size
-            images = image_tensors.to(device)
+            images = image_tensors.to(TorchExecutor.device)
 
             forward_time, cost, preds_str, labels = self._model.get_predictions(model=model,
                                                                                 batch_size=batch_size,
@@ -100,7 +100,7 @@ class TorchExecutor(ExecutorBase):
         return valid_loss_avg.val(), accuracy, norm_ED, preds_str, labels, infer_time, length_of_data
 
     def load_model(self, path):
-        model = torch.nn.DataParallel(self._model).to(device)
+        model = torch.nn.DataParallel(self._model).to(TorchExecutor.device)
         if os.path.exists(path):
             print(f'loading pretrained model from {self._stored_model}')
             model.load_state_dict(torch.load(self._stored_model))
@@ -144,7 +144,7 @@ class TorchExecutor(ExecutorBase):
             print_info("Current step {}".format(current_step))
             # train part
             image_tensors, labels = train_dataset.get_batch()
-            images = image_tensors.to(device)
+            images = image_tensors.to(TorchExecutor.device)
             cost = self._model.get_cost(model=self._model, features=images, labels=labels)
             optimizer = self._model.get_optimizer(model=model)
 
@@ -220,7 +220,7 @@ class TorchExecutor(ExecutorBase):
         with torch.no_grad():
             for image_tensors, image_path_list in dataset:
                 batch_size = image_tensors.size(0)
-                images = image_tensors.to(device)
+                images = image_tensors.to(TorchExecutor.device)
                 preds_str = self._model.get_predictions(model=multi_gpu_model,
                                                         batch_size=batch_size,
                                                         images=images,

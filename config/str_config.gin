@@ -8,7 +8,6 @@ BATCH_SIZE = 96
 
 #Experiments
 Experiments.name = "STR"
-Experiments.batch_size=192
 Experiments.num_epochs=10
 Experiments.save_checkpoints_steps=112
 Experiments.keep_checkpoint_max=5

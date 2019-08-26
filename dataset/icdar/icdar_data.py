@@ -9,6 +9,8 @@ from dataset.icdar.icdar_utils import *
 
 
 ########## Tensorflow Feature preparing routines ###########
+from print_helper import print_error, print_info
+
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
@@ -54,7 +56,7 @@ class ICDARTFDataset(TensorFlowDataset):
                  geometry="RBOX",
                  number_images_per_tfrecords=8,
                  num_cores=4,
-                 batch_size=16,
+                 batch_size=4,
                  prefetch_size=16):
         """
 
@@ -103,8 +105,22 @@ class ICDARTFDataset(TensorFlowDataset):
         self._num_train_examples = 0
 
         # TODO find a right way to get this
-        files = glob.glob(os.path.join(self._data_dir, "train/*.tfrecords"))
+        path = os.path.join(self._train_out_dir, "*.tfrecords")
+        path = path.replace("//", "/")
+        print_error(path)
+        files = glob.glob(pathname=path)
         self._num_train_examples = get_tf_records_count(files=files)
+
+        self.get_number_steps_per_epcoh(self._num_train_examples)
+
+    def get_number_steps_per_epcoh(self, num_train_examples):
+        res = num_train_examples // self._batch_size
+        print_info("\n\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print_info(f"Number of examples per epoch is {num_train_examples}")
+        print_info(f"Batch size is {self._batch_size}")
+        print_info(f"Number of steps per epoch is {res}")
+        print_info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n\n\n\n")
+        return res
 
     def _get_features(self, image_mat, score_map_mat, geo_map_mat):#, training_masks_mat):
         """
@@ -160,7 +176,7 @@ class ICDARTFDataset(TensorFlowDataset):
         images = get_images(data_path)
 
         index = 0
-        multiprocess_list = [] #list of tuples: list of images and a TFRecord file name
+        multiprocess_list = [] # list of tuples: list of images and a TFRecord file name
 
         for i in tqdm(range(0, len(images), self._number_images_per_tfrecords), desc="prepare_data: "):
             multiprocess_list.append((images[i:i + self._number_images_per_tfrecords],
@@ -231,7 +247,13 @@ class ICDARTFDataset(TensorFlowDataset):
         Reads TFRecords, decode and batches them
         :return: dataset
         """
-        files = glob.glob(os.path.join(self._train_out_dir, "/*.tfrecords"))
+        path = os.path.join(self._train_out_dir, "*.tfrecords")
+        path = path.replace("//", "/")
+        files = glob.glob(pathname=path)
+
+        assert len(files) > 0
+
+        print_info(f"Number of TFRecords : {len(files)}")
 
         # TF dataset APIs
         dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
@@ -251,14 +273,18 @@ class ICDARTFDataset(TensorFlowDataset):
         Reads TFRecords, decode and batches them
         :return: callable
         """
-        files = glob.glob(os.path.join(self._val_out_dir, "/*.tfrecords"))
+        path = os.path.join(self._val_out_dir, "*.tfrecords")
+        path = path.replace("//", "/")
+        files = glob.glob(pathname=path)
+
+        assert len(files) > 0
+
         # TF dataset APIs
         dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
         # Map the generator output as features as a dict and labels
         dataset = dataset.map(self.decode)
 
-        dataset = dataset.batch(
-            batch_size=self._batch_size, drop_remainder=False)
+        dataset = dataset.batch(batch_size=self._batch_size, drop_remainder=False)
         dataset = dataset.prefetch(self._prefetch_size)
         print("Dataset output sizes are: ")
         print(dataset)
@@ -270,7 +296,13 @@ class ICDARTFDataset(TensorFlowDataset):
         Reads TFRecords, decode and batches them
         :return: callable
         """
-        files = glob.glob(os.path.join(self._test_out_dir, "/*.tfrecords"))
+
+        path = os.path.join(self._test_out_dir, "*.tfrecords")
+        path = path.replace("//", "/")
+        files = glob.glob(pathname=path)
+
+        assert len(files) > 0
+
         # TF dataset APIs
         dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
 
