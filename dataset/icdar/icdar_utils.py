@@ -1,5 +1,6 @@
 import csv
 import os
+import time
 
 import cv2
 import gin
@@ -10,6 +11,13 @@ import tensorflow as tf
 from shapely.geometry import Polygon
 from tqdm import tqdm
 
+from dataset.data_util import GeneratorEnqueuer
+from print_helper import print_info, print_debug
+
+
+def make_dirs(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 def get_images(data_path):
     """
@@ -630,12 +638,14 @@ def image_2_data(image_file_path,
                  input_size=512,
                  background_ratio=3. / 8,
                  random_scale=np.array([0.5, 1, 2.0]),  # , 3.0]),
-                 vis=False):
+                 vis=False,
+                 batch_size=None):
     images = []
     image_fns = []
     score_maps = []
     geo_maps = []
     training_masks = []
+
     found_text_file = False
     try:
         im = cv2.imread(image_file_path)
@@ -785,30 +795,230 @@ def image_2_data(image_file_path,
             plt.show()
             plt.close()
 
-        # print_shape(im, "image")
-        # print_shape(score_map, "score_map")
-        # print_shape(geo_map, "geo_map")
-        # print_shape(training_mask, "training_mask")
 
-        image = im[:, :, ::-1].astype(np.float32)
-        # scale rest of the ata by 4 i.e sample 1 for every 4 pixels
-        score_map = score_map[::4, ::4, np.newaxis].astype(np.float32)
-        geo_map = geo_map[::4, ::4, :].astype(np.float32)
-        training_mask = training_mask[::4, ::4, np.newaxis].astype(np.float32)
+        if batch_size:
+            images.append(im[:, :, ::-1].astype(np.float32))
+            score_maps.append(score_map[::4, ::4, np.newaxis].astype(np.float32))
+            geo_maps.append(geo_map[::4, ::4, :].astype(np.float32))
+            # training_masks.append(training_mask[::4, ::4, np.newaxis].astype(np.float32))
 
-        # print_shape(image, "image")
-        # print_shape(score_map, "score_map")
-        # print_shape(geo_map, "geo_map")
-        # print_shape(training_mask, "training_mask")
-        return image, score_map, geo_map#, training_mask
+            if len(images) == batch_size:
+                yield images, score_maps, geo_maps
+                images = []
+                image_fns = []
+                score_maps = []
+                geo_maps = []
+                training_masks = []
+        else:
+            image = im[:, :, ::-1].astype(np.float32)
+            # scale rest of the ata by 4 i.e sample 1 for every 4 pixels
+            score_map = score_map[::4, ::4, np.newaxis].astype(np.float32)
+            geo_map = geo_map[::4, ::4, :].astype(np.float32)
+            # training_mask = training_mask[::4, ::4, np.newaxis].astype(np.float32)
+
+            return image, score_map, geo_map#, training_mask
 
     except Exception as e:
         import traceback
         traceback.print_exc()
 
 
-def make_dirs(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
+
+def generator(data_path,
+              geometry,
+              min_crop_side_ratio,
+              min_text_size,
+              input_size=512,
+              batch_size=4,
+              background_ratio=3./8,
+              random_scale=np.array([0.5, 1, 2.0, 3.0]),
+              vis=False):
+    image_list = np.array(get_images(data_path))
+    print_info('{} training images in {}'.format(image_list.shape[0], data_path))
+    index = np.arange(0, image_list.shape[0])
+    while True:
+        np.random.shuffle(index)
+        images = []
+        image_fns = []
+        score_maps = []
+        geo_maps = []
+        training_masks = []
+        for i in index:
+            try:
+                im_fn = image_list[i]
+                im = cv2.imread(im_fn)
+                # print im_fn
+                h, w, _ = im.shape
+                txt_fn = im_fn.replace(os.path.basename(im_fn).split('.')[1], 'txt')
+                print_info(f"Imgae file name : {im_fn} and text file name {txt_fn}")
+                if not os.path.exists(txt_fn):
+                    print('text file {} does not exists'.format(txt_fn))
+                    continue
+
+                text_polys, text_tags = load_annoataion(txt_fn)
+
+                text_polys, text_tags = check_and_validate_polys(text_polys, text_tags, (h, w))
+                # if text_polys.shape[0] == 0:
+                #     continue
+                # random scale this image
+                rd_scale = np.random.choice(random_scale)
+                im = cv2.resize(im, dsize=None, fx=rd_scale, fy=rd_scale)
+                text_polys *= rd_scale
+                # print rd_scale
+                # random crop a area from image
+                if np.random.rand() < background_ratio:
+                    # crop background
+                    im, text_polys, text_tags = crop_area(im=im,
+                                                          polys=text_polys,
+                                                          tags=text_tags,
+                                                          min_crop_side_ratio=min_crop_side_ratio,
+                                                          crop_background=False,
+                                                          max_tries=50)
+
+                    #(im, text_polys, text_tags, crop_background=True)
+                    if text_polys.shape[0] > 0:
+                        # cannot find background
+                        continue
+                    # pad and resize image
+                    new_h, new_w, _ = im.shape
+                    max_h_w_i = np.max([new_h, new_w, input_size])
+                    im_padded = np.zeros((max_h_w_i, max_h_w_i, 3), dtype=np.uint8)
+                    im_padded[:new_h, :new_w, :] = im.copy()
+                    im = cv2.resize(im_padded, dsize=(input_size, input_size))
+                    score_map = np.zeros((input_size, input_size), dtype=np.uint8)
+                    geo_map_channels = 5 if geometry == 'RBOX' else 8
+                    geo_map = np.zeros((input_size, input_size, geo_map_channels), dtype=np.float32)
+                    training_mask = np.ones((input_size, input_size), dtype=np.uint8)
+                else:
+                    im, text_polys, text_tags = crop_area(im=im,
+                                                          polys=text_polys,
+                                                          tags=text_tags,
+                                                          min_crop_side_ratio=min_crop_side_ratio,
+                                                          crop_background=False,
+                                                          max_tries=50)
+                    if text_polys.shape[0] == 0:
+                        continue
+                    h, w, _ = im.shape
+
+                    # pad the image to the training input size or the longer side of image
+                    new_h, new_w, _ = im.shape
+                    max_h_w_i = np.max([new_h, new_w, input_size])
+                    im_padded = np.zeros((max_h_w_i, max_h_w_i, 3), dtype=np.uint8)
+                    im_padded[:new_h, :new_w, :] = im.copy()
+                    im = im_padded
+                    # resize the image to input size
+                    new_h, new_w, _ = im.shape
+                    resize_h = input_size
+                    resize_w = input_size
+                    im = cv2.resize(im, dsize=(resize_w, resize_h))
+                    resize_ratio_3_x = resize_w/float(new_w)
+                    resize_ratio_3_y = resize_h/float(new_h)
+                    text_polys[:, :, 0] *= resize_ratio_3_x
+                    text_polys[:, :, 1] *= resize_ratio_3_y
+                    new_h, new_w, _ = im.shape
+                    score_map, geo_map, training_mask = generate_rbox((new_h, new_w),
+                                                                      text_polys,
+                                                                      text_tags,
+                                                                      min_text_size=min_text_size)
+
+                if vis:
+                    fig, axs = plt.subplots(3, 2, figsize=(20, 30))
+                    # axs[0].imshow(im[:, :, ::-1])
+                    # axs[0].set_xticks([])
+                    # axs[0].set_yticks([])
+                    # for poly in text_polys:
+                    #     poly_h = min(abs(poly[3, 1] - poly[0, 1]), abs(poly[2, 1] - poly[1, 1]))
+                    #     poly_w = min(abs(poly[1, 0] - poly[0, 0]), abs(poly[2, 0] - poly[3, 0]))
+                    #     axs[0].add_artist(Patches.Polygon(
+                    #         poly * 4, facecolor='none', edgecolor='green', linewidth=2, linestyle='-', fill=True))
+                    #     axs[0].text(poly[0, 0] * 4, poly[0, 1] * 4, '{:.0f}-{:.0f}'.format(poly_h * 4, poly_w * 4),
+                    #                    color='purple')
+                    # axs[1].imshow(score_map)
+                    # axs[1].set_xticks([])
+                    # axs[1].set_yticks([])
+                    axs[0, 0].imshow(im[:, :, ::-1])
+                    axs[0, 0].set_xticks([])
+                    axs[0, 0].set_yticks([])
+                    for poly in text_polys:
+                        poly_h = min(abs(poly[3, 1] - poly[0, 1]), abs(poly[2, 1] - poly[1, 1]))
+                        poly_w = min(abs(poly[1, 0] - poly[0, 0]), abs(poly[2, 0] - poly[3, 0]))
+                        axs[0, 0].add_artist(Patches.Polygon(
+                            poly, facecolor='none', edgecolor='green', linewidth=2, linestyle='-', fill=True))
+                        axs[0, 0].text(poly[0, 0], poly[0, 1], '{:.0f}-{:.0f}'.format(poly_h, poly_w), color='purple')
+                    axs[0, 1].imshow(score_map[::, ::])
+                    axs[0, 1].set_xticks([])
+                    axs[0, 1].set_yticks([])
+                    axs[1, 0].imshow(geo_map[::, ::, 0])
+                    axs[1, 0].set_xticks([])
+                    axs[1, 0].set_yticks([])
+                    axs[1, 1].imshow(geo_map[::, ::, 1])
+                    axs[1, 1].set_xticks([])
+                    axs[1, 1].set_yticks([])
+                    axs[2, 0].imshow(geo_map[::, ::, 2])
+                    axs[2, 0].set_xticks([])
+                    axs[2, 0].set_yticks([])
+                    axs[2, 1].imshow(training_mask[::, ::])
+                    axs[2, 1].set_xticks([])
+                    axs[2, 1].set_yticks([])
+                    plt.tight_layout()
+                    plt.show()
+                    plt.close()
+
+                images.append(im[:, :, ::-1].astype(np.float32))
+                # image_fns.append(im_fn)
+                score_maps.append(score_map[::4, ::4, np.newaxis].astype(np.float32))
+                geo_maps.append(geo_map[::4, ::4, :].astype(np.float32))
+                training_masks.append(training_mask[::4, ::4, np.newaxis].astype(np.float32))
+
+                if len(images) == batch_size:
+                    #yield np.array(images), np.array(score_maps), np.array(geo_maps)
+                    yield {"images": np.array(images), "score_maps": np.array(score_maps),
+                           "geo_maps": np.array(geo_maps)}, np.array(images)
+                    images = []
+                    score_maps = []
+                    geo_maps = []
+                    training_masks = []
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                continue
+
+def get_batch(num_workers,
+              data_path,
+              min_crop_side_ratio,
+              min_text_size,
+              geometry='RBOX',
+              input_size=512,
+              batch_size=4,
+              background_ratio=3. / 8,
+              random_scale=np.array([0.5, 1, 2.0, 3.0]),
+              vis=False):
+    try:
+        enqueuer = GeneratorEnqueuer(generator(data_path=data_path,
+                                               geometry=geometry,
+                                               min_crop_side_ratio=min_crop_side_ratio,
+                                               min_text_size=min_text_size,
+                                               input_size=input_size,
+                                               batch_size=batch_size,
+                                               background_ratio=background_ratio,
+                                               random_scale=random_scale,
+                                               vis=vis),
+                                     use_multiprocessing=True)
+        print('Generator use 10 batches for buffering, this may take a while, you can tune this yourself.')
+        enqueuer.start(max_queue_size=10, workers=num_workers)
+        generator_output = None
+        while True:
+            while enqueuer.is_running():
+                if not enqueuer.queue.empty():
+                    generator_output = enqueuer.queue.get()
+                    break
+                else:
+                    time.sleep(0.01)
+            yield generator_output
+            generator_output = None
+    finally:
+        if enqueuer is not None:
+            enqueuer.stop()
+
 
 # ======================================================================================================================

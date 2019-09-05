@@ -2,6 +2,7 @@
 Experiments class that allows easy plug n play of modules
 """
 from absl import logging
+import gc
 import os
 import shutil
 import gin
@@ -11,10 +12,14 @@ import random
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import psutil
 
 from print_helper import *
 from engines.tf_executor import TFExecutor
 from engines.torch_executor import TorchExecutor
+import objgraph
+
 
 
 @gin.configurable
@@ -116,10 +121,38 @@ class Experiments(object):
                                   max_train_steps=self._num_max_steps,
                                   validation_interval_steps=self._validation_interval_steps)
 
+            memory_used = []
+            process = psutil.Process(os.getpid())
+            print('Initial objects')
+            objgraph.show_growth(limit=100)
+
             if mode in ["train", "retrain"]:
+                memory_usage_psutil()
                 for epoch in tqdm(range(self._num_epochs), desc="epoch"):
-                    executor.train_and_evaluate(max_train_steps=self._num_max_steps,
-                                                eval_steps=None)
+
+                    memory_used.append(process.memory_info()[0] / float(2 ** 20))
+                    print_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Training")
+                    memory_usage_psutil()
+                    executor.train(max_steps=None)
+                    gc.collect()
+                    print_warn(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Evaluating")
+                    memory_usage_psutil()
+                    executor.evaluate(steps=None)
+
+                    print('Object growth after iteration {}'.format(epoch))
+                    objgraph.show_growth(limit=100)
+                    # objgraph.show_backrefs(
+                    #     objgraph.by_type('Graph'),
+                    #     max_depth=25,
+                    #     filename='iter-{}.png'.format(epoch))
+
+                plt.plot(memory_used)
+                plt.title('Evolution of memory')
+                plt.xlabel('iteration')
+                plt.ylabel('memory used (MB)')
+                plt.show()
+                d = input("wait: ")
             elif mode in ["serving"]:
-                executor.predict_directory(in_path=inference_file_or_path, out_path=out_files_path)
+                executor.predict_directory(in_path=inference_file_or_path,
+                                           out_path=out_files_path)
 

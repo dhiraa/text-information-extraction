@@ -1,3 +1,5 @@
+import os
+
 from absl import logging
 """
 Wrapper for print function with colorful text output
@@ -81,4 +83,16 @@ def print_debug(*args):
     :param args: user string information
     :return: stdout
     """
-    logging.debug(CBLUEBG2 + str(*args) + CEND)
+    logging.debug(CVIOLET + str(*args) + CEND)
+
+
+def memory_usage_psutil():
+    # return the memory usage in MB
+    import psutil
+    process = psutil.Process(os.getpid())
+    mem = process.memory_info()[0] / float(2 ** 20)
+    print_info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    print_warn(f"Memory used is {mem}")
+    print_info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+
+    return mem

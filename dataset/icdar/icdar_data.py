@@ -4,12 +4,14 @@ import glob
 import multiprocessing
 
 from dataset.dataset_base import TensorFlowDataset
+from dataset.icdar import icdar_utils
 from dataset.icdar.icdar_utils import *
 
 
 
 ########## Tensorflow Feature preparing routines ###########
-from print_helper import print_error, print_info
+
+from print_helper import print_error, print_info, memory_usage_psutil
 
 
 def _int64_feature(value):
@@ -33,7 +35,7 @@ def _mat_feature(mat):
 def get_tf_records_count(files):
     total_records = 0
     for file in tqdm(files, desc="tfrecords size: "):
-        total_records += sum(1 for _ in tf.data.TFRecordDataset(file))
+        total_records += 1#sum(1 for _ in tf.data.TFRecordDataset(file))
     return total_records
 
 
@@ -95,7 +97,7 @@ class ICDARTFDataset(TensorFlowDataset):
         self._min_crop_side_ratio = min_crop_side_ratio
         self._number_images_per_tfrecords = number_images_per_tfrecords
 
-        self.preprocess()
+        # self.preprocess()
 
         self._data_dir = data_dir
         self._num_cores = num_cores
@@ -113,13 +115,19 @@ class ICDARTFDataset(TensorFlowDataset):
 
         self.get_number_steps_per_epcoh(self._num_train_examples)
 
+
+        self._train_dataset = None
+        self._val_dataset = None
+
     def get_number_steps_per_epcoh(self, num_train_examples):
         res = num_train_examples // self._batch_size
-        print_info("\n\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print("\n\n\n\n\n")
+        print_info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         print_info(f"Number of examples per epoch is {num_train_examples}")
         print_info(f"Batch size is {self._batch_size}")
         print_info(f"Number of steps per epoch is {res}")
-        print_info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n\n\n\n")
+        print_info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+        print("\n\n\n\n\n")
         return res
 
     def _get_features(self, image_mat, score_map_mat, geo_map_mat):#, training_masks_mat):
@@ -142,11 +150,6 @@ class ICDARTFDataset(TensorFlowDataset):
         :return:
         """
         num_of_files_skipped = 0
-
-        if os.path.exists(file_path_name):
-            num_records = get_tf_records_count([file_path_name])
-            print("Found ", file_path_name, f"with {num_records} records already! Hence skipping")
-            return
 
         with tf.io.TFRecordWriter(file_path_name) as writer:
             for image_file in tqdm(images, desc="pid : " + str(os.getpid())):
@@ -179,18 +182,23 @@ class ICDARTFDataset(TensorFlowDataset):
         multiprocess_list = [] # list of tuples: list of images and a TFRecord file name
 
         for i in tqdm(range(0, len(images), self._number_images_per_tfrecords), desc="prepare_data: "):
-            multiprocess_list.append((images[i:i + self._number_images_per_tfrecords],
-                                      out_path + "/" + str(index) + ".tfrecords"))
-            index += 1
+            file_path_name = out_path + "/" + str(index) + ".tfrecords"
+            if os.path.exists(file_path_name):
+                num_records = get_tf_records_count([file_path_name])
+                print("Found in ", file_path_name, f"with {num_records} records already! Hence skipping")
+            else:
+                multiprocess_list.append((images[i:i + self._number_images_per_tfrecords], file_path_name))
+                index += 1
 
-        # creating a pool object
-        pool = multiprocessing.Pool()
+        if len(multiprocess_list) > 1: #process only when no TFRecords are found
+            # creating a pool object
+            pool = multiprocessing.Pool()
 
-        # map list to target function
-        pool.map(self.task, multiprocess_list)
+            # map list to target function
+            pool.map(self.task, multiprocess_list)
 
-        pool.close()
-        pool.join()
+            pool.close()
+            pool.join()
 
     def preprocess(self):
         self.prepare_data(data_path=self._data_dir + "/train/", out_path=self._train_out_dir)
@@ -234,6 +242,7 @@ class ICDARTFDataset(TensorFlowDataset):
             tf.cast(features['score_maps'], tf.float32), shape=[128, 128, 1])
         geo_map = tf.reshape(
             tf.cast(features['geo_maps'], tf.float32), shape=[128, 128, 5])
+
         # training_masks = tf.reshape(
         #     tf.cast(features['training_masks'], tf.float32), shape=[128, 128, 1])
         #
@@ -242,54 +251,119 @@ class ICDARTFDataset(TensorFlowDataset):
 
         return {"images": image, "score_maps": score_map, "geo_maps": geo_map}, image #dummy label/Y
 
-    def _get_train_dataset(self):
+    def _prepare_train_dataset(self):
         """
         Reads TFRecords, decode and batches them
         :return: dataset
         """
+        print_info("_get_train_dataset")
+        memory_usage_psutil()
         path = os.path.join(self._train_out_dir, "*.tfrecords")
         path = path.replace("//", "/")
-        files = glob.glob(pathname=path)
+        # files = glob.glob(pathname=path)
 
-        assert len(files) > 0
-
-        print_info(f"Number of TFRecords : {len(files)}")
+        train_tfrecord_files = tf.data.Dataset.list_files(path)
 
         # TF dataset APIs
-        dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        # dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        dataset = train_tfrecord_files.interleave(
+            tf.data.TFRecordDataset, cycle_length=self._num_cores,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.shuffle(self._batch_size*10, 42)
         # Map the generator output as features as a dict and labels
-        dataset = dataset.map(self.decode)
-
+        dataset = dataset.map(map_func=self.decode, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(batch_size=self._batch_size, drop_remainder=False)
-        dataset = dataset.prefetch(self._prefetch_size)
+        self._train_dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+        # self._train_dataset = self._train_dataset.make_one_shot_iterator()
+        # dataset = dataset.repeat()
         # dataset = dataset.cache(filename=os.path.join(self.iterator_dir, "train_data_cache"))
-        print("Dataset output sizes are: ")
-        print(dataset)
 
-        return dataset
+    def _get_train_dataset(self):
+        self._prepare_train_dataset()
+        print_info("Dataset output sizes are: ")
+        print_info(self._train_dataset)
+        memory_usage_psutil()
 
-    def _get_val_dataset(self):
+        # return dataset
+
+        # iterator = self._train_dataset.make_one_shot_iterator()
+        #
+        # batch_feats, batch_labels = iterator.get_next()
+
+        return self._train_dataset
+
+    # def _get_train_dataset(self):
+    #
+    #     data_generator = icdar_utils.get_batch(num_workers=self._num_cores,
+    #                                            data_path=self._data_dir + "/train/",
+    #                                            input_size=512,
+    #                                            batch_size=self._batch_size,
+    #                                            background_ratio=3. / 8,
+    #                                            random_scale=np.array([0.5, 1, 2.0, 3.0]),
+    #                                            vis=False,
+    #                                            min_crop_side_ratio=self._min_crop_side_ratio,
+    #                                            min_text_size=self._min_text_size)
+    #     def gen():
+    #         return next(data_generator)
+    #
+    #     dataset = tf.data.Dataset.from_generator(generator=gen,
+    #                                              output_types=(tf.float32,tf.float32, tf.float32))
+    #                                              # output_shapes=(tf.TensorShape([512, 512, 3]),
+    #                                              #                tf.TensorShape([128, 128, 1]),
+    #                                              #                tf.TensorShape([128, 128, 5])))
+    #     # data = next(data_generator)
+    #     # # images, score_maps, geo_maps = data
+    #     # return data #{"images": images, "score_maps": score_maps, "geo_maps": geo_maps}, images
+    #     dataset = dataset.batch(batch_size=self._batch_size, drop_remainder=False)
+    #     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    #     # dataset = dataset.repeat()
+    #     # dataset = dataset.cache(filename=os.path.join(self.iterator_dir, "train_data_cache"))
+    #     print_info("Dataset output sizes are: ")
+    #     print_info(dataset)
+    #     memory_usage_psutil()
+    #
+    #     return dataset
+
+    def _prepare_val_dataset(self):
         """
         Reads TFRecords, decode and batches them
         :return: callable
         """
+        print_info("_get_val_dataset")
+        memory_usage_psutil()
         path = os.path.join(self._val_out_dir, "*.tfrecords")
         path = path.replace("//", "/")
-        files = glob.glob(pathname=path)
+        # train_tfrecord_files = glob.glob(pathname=path)
 
-        assert len(files) > 0
+        val_tfrecord_files = tf.data.Dataset.list_files(path)
 
         # TF dataset APIs
-        dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        # dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        dataset = val_tfrecord_files.interleave(
+            tf.data.TFRecordDataset, cycle_length=self._num_cores,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.shuffle(self._batch_size*10, 42)
         # Map the generator output as features as a dict and labels
-        dataset = dataset.map(self.decode)
-
+        dataset = dataset.map(map_func=self.decode, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(batch_size=self._batch_size, drop_remainder=False)
-        dataset = dataset.prefetch(self._prefetch_size)
-        print("Dataset output sizes are: ")
-        print(dataset)
+        self._val_dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
-        return dataset
+        # self._val_dataset = self._val_dataset.make_one_shot_iterator()
+
+        # dataset = dataset.repeat()
+        # dataset = dataset.cache(filename=os.path.join(self.iterator_dir, "train_data_cache"))
+
+    def _get_val_dataset(self):
+        self._prepare_val_dataset()
+
+        print_info("Dataset output sizes are: ")
+        print_info(self._val_dataset)
+        memory_usage_psutil()
+        # iterator = self._val_dataset.make_one_shot_iterator()
+        #
+        # batch_feats, batch_labels = iterator.get_next()
+
+        return self._val_dataset
 
     def _get_test_dataset(self):
         """
@@ -304,17 +378,26 @@ class ICDARTFDataset(TensorFlowDataset):
         assert len(files) > 0
 
         # TF dataset APIs
-        dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        # dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+
+        files = tf.data.Dataset.list_files(path)
+
+        # TF dataset APIs
+        # dataset = tf.data.TFRecordDataset(files, num_parallel_reads=self._num_cores)
+        dataset = files.interleave(
+            tf.data.TFRecordDataset, cycle_length=self._num_cores,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         # Map the generator output as features as a dict and labels
         dataset = dataset.map(self.decode)
 
         dataset = dataset.batch(
-            batch_size=self._hparams.batch_size, drop_remainder=True)
-        dataset = dataset.prefetch(self._hparams.prefetch_size)
-        print("Dataset output sizes are: ")
-        print(dataset)
-
+            batch_size=self._hparams.batch_size, drop_remainder=False)
+        # dataset = dataset.shuffle(self._prefetch_size * 2, 42)
+        dataset = dataset.prefetch(self._prefetch_size)
+        # dataset = dataset.repeat()
+        print_info("Dataset output sizes are: ")
+        print_info(dataset)
         return dataset
 
     def serving_input_receiver_fn(self):

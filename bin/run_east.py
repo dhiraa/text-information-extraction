@@ -13,6 +13,9 @@ from absl import logging
 logging.set_verbosity(logging.INFO)
 
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
 
 def main(args):
     print(' -' * 35)

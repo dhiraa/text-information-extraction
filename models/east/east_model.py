@@ -6,7 +6,7 @@ from models.model_base import TFModelBase
 
 from absl import logging
 
-from print_helper import print_info, print_warn
+from print_helper import print_info, print_warn, print_error
 
 layers = tf.keras.layers
 models = tf.keras.models
@@ -313,7 +313,7 @@ def get_loss(y_true_cls,
              y_pred_cls,
              y_true_geo,
              y_pred_geo):
-             # training_mask):
+    # training_mask):
     """
     define the loss used for training, contraning two part,
     the first part we use dice loss instead of weighted logloss,
@@ -413,12 +413,6 @@ class EASTTFModel(TFModelBase):
             # add summary
             tf.summary.scalar('learning_rate', learning_rate)
 
-            # optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate,
-            #    beta_1=0.9,
-            #    beta_2=0.999,
-            #    epsilon=1e-7,
-            #    amsgrad=False,
-            #    name='Adam')
             optimizer = tf.compat.v1.train.AdamOptimizer(
                 learning_rate=learning_rate,
                 beta1=0.9,
@@ -442,6 +436,35 @@ class EASTTFModel(TFModelBase):
 
         return train_op
 
+    # def _get_optimizer(self, loss):
+    #     with tf.name_scope("optimizer") as scope:
+    #
+    #         global_step = tf.compat.v1.train.get_global_step()
+    #         learning_rate = tf.compat.v1.train.exponential_decay(self._learning_rate,
+    #                                                    global_step,
+    #                                                    decay_steps=100,
+    #                                                    decay_rate=0.94,
+    #                                                    staircase=True)
+    #
+    #         optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001,
+    #                                              beta_1=0.9,
+    #                                              beta_2=0.999,
+    #                                              epsilon=1e-7,
+    #                                              amsgrad=False,
+    #                                              name='Adam')
+    #
+    #         optimizer.iterations = tf.compat.v1.train.get_or_create_global_step()
+    #
+    #         # Get both the unconditional updates (the None part)
+    #         # and the input-conditional updates (the features part).
+    #         # update_ops = model.get_updates_for(None) + model.get_updates_for(features)
+    #         # Compute the minimize_op.
+    #         minimize_op = optimizer.get_updates(
+    #             loss,
+    #             tf.compat.v1.trainable_variables())[0]
+    #         train_op = tf.group(minimize_op)
+    #         return train_op
+
     def __call__(self, features, labels, params, mode, config=None):
         """
         Used for the :tf_main:`model_fn <estimator/Estimator#__init__>`
@@ -462,6 +485,9 @@ class EASTTFModel(TFModelBase):
     def _build(self, features, labels, params, mode, config=None):
 
         input_images = features['images']
+        input_images = tf.convert_to_tensor(input_images)
+
+        print_error(input_images)
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
 
@@ -482,7 +508,7 @@ class EASTTFModel(TFModelBase):
                                   f_score,
                                   input_geo_maps,
                                   f_geometry)#,
-                                  # input_training_masks)
+            # input_training_masks)
             loss = tf.add_n(
                 [model_loss] + tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES))
 

@@ -134,23 +134,22 @@ class TFExecutor(ExecutorBase):
             steps=steps,
             hooks=self._eval_hooks)
 
-    def train(self, num_max_steps=None):
+    def train(self, max_steps=None):
         """
         Trains the model. See :tf_main:`tf.estimator.Estimator.train
         <estimator/Estimator#train>` for more details.
 
         Args:
-            num_max_steps (int, optional): Total number of steps for which
+            max_steps (int, optional): Total number of steps for which
                 to train model. If `None`, train forever or until the train
                 data generates the OutOfRange exception. If OutOfRange occurs
                 in the middle, training stops before :attr:`max_steps` steps.
         """
-        print_error(num_max_steps)
-        train_spec = self._get_train_spec(max_steps=num_max_steps)
+        self.train_spec = self._get_train_spec(max_steps=max_steps)
         self._estimator.train(
-            input_fn=train_spec.input_fn,
-            hooks=train_spec.hooks,
-            max_steps=train_spec.max_steps)
+            input_fn=self.train_spec.input_fn,
+            hooks=self.train_spec.hooks,
+            max_steps=self.train_spec.max_steps)
 
     def evaluate(self, steps=None, checkpoint_path=None):
         """
